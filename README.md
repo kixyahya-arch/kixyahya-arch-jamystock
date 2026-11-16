@@ -19,9 +19,11 @@ apps/api          API NestJS (REST) sur PostgreSQL 16 : authentification, RBAC �
 apps/api/migrations  Schéma SQL complet du MCD (§5) et politiques Row-Level Security.
 apps/terrain      PWA hors-ligne (Vite + React) : réception, déplacement, préparation, chargement,
                   livraison signée, collecte. Base locale IndexedDB et file d'envoi ordonnée.
+apps/client       Espace Client (Vite + React) : stock en vignettes, fiche, filtres, jauge m², panier,
+                  livraison ou retrait, suivi et validation des commandes, demande de collecte.
 ```
 
-À venir : `apps/web` (Next.js : Espace Client + Back-Office), workers BullMQ.
+À venir : Back-Office (dispatch, administration, facturation), workers BullMQ.
 
 ### Principes clés
 
@@ -50,6 +52,7 @@ pnpm db:seed                            # affiche le TENANT_ID à reporter dans 
 pnpm --filter @jamystock/domain build
 pnpm dev:api                            # http://localhost:3000
 pnpm --filter @jamystock/terrain dev    # app terrain sur http://localhost:5173 (relaie /api vers :3000)
+pnpm --filter @jamystock/client dev     # Espace Client sur http://localhost:5174
 ```
 
 Sur téléphone, la caméra exige HTTPS (ou `localhost`) : passer par un tunnel HTTPS ou utiliser la saisie
@@ -80,7 +83,9 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | GET | `/api/v1/auth/me` | tous | |
 | GET | `/api/v1/articles?projet&depot&categorie&etat&statut&q&apres&limite` | tous | INV-01, INV-03 |
 | GET | `/api/v1/articles/:id` | tous | INV-02 |
-| GET / POST / DELETE | `/api/v1/cart`, `/cart/items`, `/cart/items/:articleId` | clients | CMD-01 |
+| GET / POST / DELETE | `/api/v1/cart`, `/cart/items`, `/cart/items/:articleId` (avec estimation : date au plus tôt, coût, livraisons incluses) | clients | CMD-01, CMD-04 |
+| GET | `/api/v1/me/context`, `/me/surface` | clients | INV-03, INV-04, ADM-01 |
+| GET | `/api/v1/files/photos/:id/:taille?t&e&s` (lien signé 15 min, sans jeton) | public signé | §7.3 |
 | POST | `/api/v1/orders/:id/submit` | clients | CMD-02 à 05 |
 | POST | `/api/v1/collections` | clients | CMD-06 |
 | POST | `/api/v1/orders/:id/approve`, `/reject` | B2B Admin | CMD-05 |
@@ -132,8 +137,9 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 ## Feuille de route
 
 - **A. Socle** (fait) : monorepo, domaine, schéma, auth, RBAC + RLS, audit, panier et commandes, CI.
-- **B. Tranche verticale** (API et PWA terrain faites) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
-  livraison avec signature du BL et empreinte SHA-256. Restent : Espace Client (inventaire, panier, suivi) et Back-Office (dispatch).
+- **B. Tranche verticale** (faite) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
+  livraison avec signature du BL et empreinte SHA-256, Espace Client (stock, jauge m², panier, suivi, collecte).
+  Reste : Back-Office (tableau de bord dispatch, affectation, contre-proposition).
 - **C. Facturation** : instantané m² quotidien, factures mensuelles et avoirs, Stripe.
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.

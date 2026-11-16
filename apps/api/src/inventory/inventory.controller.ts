@@ -7,6 +7,7 @@ import { CurrentUser, RequirePermission } from '../auth/decorators.js';
 import type { AuthUser } from '../auth/auth.service.js';
 import { ctxOf } from '../common/context.js';
 import { notFound } from '../common/errors.js';
+import { FilesService } from '../files/files.service.js';
 
 const ListQuery = z.object({
   projet: z.string().uuid().optional(),
@@ -28,7 +29,10 @@ const ListQuery = z.object({
  */
 @Controller('articles')
 export class InventoryController {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    @Inject(FilesService) private readonly files: FilesService,
+  ) {}
 
   @Get()
   @RequirePermission('inventory.read')
@@ -74,17 +78,21 @@ export class InventoryController {
       const rows = await tx.query(
         `SELECT a.id, a.qr_code AS "qrCode", a.libelle, a.nom_client AS "nomClient", a.statut, a.etat,
                 a.projet_id AS "projetId", c.nom AS categorie, e.chemin AS localisation, a.date_entree AS "dateEntree",
-                (SELECT p.cle_vignette FROM photo p WHERE p.article_id = a.id ORDER BY p.prise_le LIMIT 1) AS vignette,
+                (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS "photoId",
                 EXISTS (SELECT 1 FROM ligne_commande lc WHERE lc.article_id = a.id AND lc.active) AS "engage"
            ${from} ${pageWhere}
           ORDER BY a.id DESC LIMIT $${pageParams.length}`,
         pageParams,
       );
-      const items = rows.rows;
+      // liens signés à la place des clés de stockage (§7.3)
+      const items = rows.rows.map(({ photoId, ...r }: Record<string, unknown>) => ({
+        ...r,
+        vignette: photoId ? this.files.photoUrl(user.tenantId, photoId as string, 't') : null,
+      }));
       return {
         total: count.rows[0]!.n,
         items,
-        suivant: items.length === q.limite ? (items[items.length - 1] as { id: string }).id : null,
+        suivant: items.length === q.limite ? (rows.rows[rows.rows.length - 1] as { id: string }).id : null,
       };
     });
   }
@@ -105,8 +113,7 @@ export class InventoryController {
       );
       if (!a.rows[0]) throw notFound('Article');
       const photos = await tx.query(
-        `SELECT id, cle_vignette AS vignette, cle_moyenne AS moyenne, cle_originale AS originale, contexte, prise_le AS "priseLe"
-           FROM photo WHERE article_id = $1 ORDER BY prise_le`,
+        `SELECT id, contexte, prise_le AS "priseLe", televersee FROM photo WHERE article_id = $1 ORDER BY prise_le`,
         [id],
       );
       const mouvements = await tx.query(
@@ -118,7 +125,11 @@ export class InventoryController {
         [id],
       );
       const { recherche: _r, ...article } = a.rows[0] as Record<string, unknown>;
-      return { ...article, photos: photos.rows, mouvements: mouvements.rows };
+      // une photo déclarée par le terminal mais pas encore téléversée est listée, sans lien
+      const withUrls = photos.rows.map(({ televersee, ...p }: { id: string; televersee: boolean }) =>
+        televersee ? { ...p, disponible: true, ...this.files.photoUrls(user.tenantId, p.id) } : { ...p, disponible: false },
+      );
+      return { ...article, photos: withUrls, mouvements: mouvements.rows };
     });
   }
 }

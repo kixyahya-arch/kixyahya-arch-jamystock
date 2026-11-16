@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { generateQrCode, uuidv7 } from '@jamystock/domain';
 import { hashPassword } from '../auth/auth.service.js';
+import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
 
 /**
  * Données de démonstration : 1 exploitant, 1 dépôt, 2 clients B2B + 1 client B2C, un compte par rôle.
@@ -73,12 +74,16 @@ export async function seed(databaseUrl: string): Promise<SeedResult> {
     }
 
     // --- catégories
+    const icons = new Map<string, string>();
+    const storageDir = process.env.STORAGE_DIR ?? '.storage';
+    let photoSeq = 0;
     const cat = async (nom: string, icone: string, l: number, w: number, h: number, empilable = false) => {
       const id = uuidv7();
       await q(
         'INSERT INTO categorie (id, tenant_id, nom, icone, longueur_m, largeur_m, hauteur_m, empilable) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
         [id, tenantId, nom, icone, l, w, h, empilable],
       );
+      icons.set(id, icone);
       return id;
     };
     const cBureau = await cat('Bureau', 'desk', 1.6, 0.8, 0.75);
@@ -169,10 +174,12 @@ export async function seed(databaseUrl: string): Promise<SeedResult> {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'BON','EN_STOCK',$12, now() - interval '30 days', now() - interval '30 days', $13)`,
         [id, tenantId, entrepriseId, projetId, generateQrCode('A'), libelle, categorieId, dims[0], dims[1], dims[2], empilable, loc, users.operator.id],
       );
+      const photoKey = `${tenantId}/demo/${id}.svg`;
+      await writeDemoPhoto(storageDir, photoKey, demoPhotoSvg(libelle, icons.get(categorieId) ?? 'box', photoSeq++));
       await q(
-        `INSERT INTO photo (id, tenant_id, article_id, cle_originale, cle_vignette, cle_moyenne, contexte, prise_par, televersee)
-         VALUES ($1,$2,$3,$4,$5,$6,'RECEPTION',$7,true)`,
-        [uuidv7(), tenantId, id, `demo/${id}/o.webp`, `demo/${id}/t.webp`, `demo/${id}/m.webp`, users.operator.id],
+        `INSERT INTO photo (id, tenant_id, article_id, cle_originale, contexte, prise_par, televersee, type_mime)
+         VALUES ($1,$2,$3,$4,'RECEPTION',$5,true,'image/svg+xml')`,
+        [uuidv7(), tenantId, id, photoKey, users.operator.id],
       );
       await q(
         `INSERT INTO mouvement (id, tenant_id, article_id, type, vers_emplacement_id, statut_avant, statut_apres, auteur_id, horodatage_terminal)

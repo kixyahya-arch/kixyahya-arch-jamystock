@@ -91,11 +91,43 @@ export class OrdersService {
 
   // ---------------------------------------------------------------- panier (CMD-01)
 
-  async getCart(user: AuthUser, projetId?: string) {
+  async getCart(user: AuthUser, projetId?: string, now = new Date()) {
     return this.db.tx(ctxOf(user), async (tx) => {
       const cart = await this.findCart(tx, user, projetId);
-      return cart ? this.present(tx, cart) : { lignes: [], nbArticles: 0, volumeM3: 0, vehiculeSuggere: null };
+      const base = cart ? await this.present(tx, cart) : { lignes: [], nbArticles: 0, volumeM3: 0, vehiculeSuggere: null };
+      return { ...base, estimation: await this.estimate(tx, user, now) };
     });
+  }
+
+  /**
+   * CMD-04 : ce que le client voit avant de valider. Date au plus tôt (RG-CMD-01) et coût de la prestation
+   * selon sa grille, en signalant les livraisons incluses dans son forfait (RG-M2-06).
+   */
+  private async estimate(tx: Tx, user: AuthUser, now: Date) {
+    const f = (
+      await tx.query<{ lignes: { code: string; libelle: string; prix_ht_cents: number }[]; prestations_incluses: Record<string, number> }>(
+        `SELECT g.lignes, f.prestations_incluses FROM forfait f JOIN grille_tarifaire g ON g.id = f.grille_tarifaire_id
+          WHERE f.entreprise_id = $1 AND f.statut = 'ACTIF' AND f.date_debut <= current_date AND (f.date_fin IS NULL OR f.date_fin >= current_date)
+          ORDER BY f.version DESC LIMIT 1`,
+        [user.entrepriseId],
+      )
+    ).rows[0];
+    const livraison = f?.lignes.find((l) => l.code.startsWith('LIVRAISON'));
+    const used = (
+      await tx.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM commande WHERE entreprise_id = $1 AND type = 'LIVRAISON'
+            AND statut NOT IN ('BROUILLON','ANNULEE','REFUSEE') AND date_trunc('month', created_at) = date_trunc('month', now())`,
+        [user.entrepriseId],
+      )
+    ).rows[0]!.n;
+    const incluses = f?.prestations_incluses?.LIVRAISON ?? 0;
+    return {
+      datePlusTot: earliestDeliveryDate(now),
+      livraison: livraison ? { libelle: livraison.libelle, prixHtCents: livraison.prix_ht_cents } : null,
+      livraisonsIncluses: incluses,
+      livraisonsIncluseRestantes: Math.max(0, incluses - used),
+      retraitHtCents: 0,
+    };
   }
 
   async addToCart(user: AuthUser, articleIds: string[], projetId?: string) {
@@ -159,8 +191,8 @@ export class OrdersService {
         throw unprocessable('ADRESSE_REQUISE', 'Adresse et contact sur place obligatoires pour une livraison');
       }
 
-      const lines = await tx.query<{ article_id: string; statut: string; longueur_m: number | null; largeur_m: number | null; hauteur_m: number | null; poids_kg: number | null; depot_id: string | null }>(
-        `SELECT a.id AS article_id, a.statut, a.longueur_m, a.largeur_m, a.hauteur_m, a.poids_kg, z.depot_id
+      const lines = await tx.query<{ article_id: string; libelle: string; statut: string; longueur_m: number | null; largeur_m: number | null; hauteur_m: number | null; poids_kg: number | null; depot_id: string | null }>(
+        `SELECT a.id AS article_id, a.libelle, a.statut, a.longueur_m, a.largeur_m, a.hauteur_m, a.poids_kg, z.depot_id
            FROM ligne_commande l JOIN article a ON a.id = l.article_id
            LEFT JOIN emplacement e ON e.id = a.emplacement_courant_id LEFT JOIN zone z ON z.id = e.zone_id
           WHERE l.commande_id = $1 FOR UPDATE OF a`,
@@ -168,7 +200,10 @@ export class OrdersService {
       );
       if (lines.rows.length === 0) throw unprocessable('PANIER_VIDE', 'Le panier est vide');
       const unavailable = lines.rows.filter((l) => l.statut !== 'EN_STOCK');
-      if (unavailable.length) throw conflict('ARTICLE_INDISPONIBLE', `Articles indisponibles : ${unavailable.map((l) => l.article_id).join(', ')}`);
+      if (unavailable.length) throw conflict(
+          'ARTICLE_INDISPONIBLE',
+          `Plus disponible${unavailable.length > 1 ? 's' : ''} (déjà dans une autre commande) : ${unavailable.map((l) => l.libelle).join(', ')}. Retirez-${unavailable.length > 1 ? 'les' : 'le'} du panier.`,
+        );
       const depots = new Set(lines.rows.map((l) => l.depot_id).filter(Boolean));
       if (depots.size > 1) throw unprocessable('MULTI_DEPOTS', 'Les articles d’une commande doivent être dans le même dépôt');
       const depotId = [...depots][0] ?? null;
@@ -489,8 +524,9 @@ export class OrdersService {
   private async present(tx: Tx, order: OrderRow) {
     const lignes = await tx.query<{ longueur_m: number | null; largeur_m: number | null; hauteur_m: number | null }>(
       `SELECT l.id, l.article_id AS "articleId", l.description_libre AS "descriptionLibre", l.statut_ligne AS "statutLigne",
-              a.libelle, a.qr_code AS "qrCode", a.longueur_m, a.largeur_m, a.hauteur_m
-         FROM ligne_commande l LEFT JOIN article a ON a.id = l.article_id
+              a.libelle, a.qr_code AS "qrCode", a.longueur_m, a.largeur_m, a.hauteur_m,
+              (a.id IS NULL OR a.statut = 'EN_STOCK' OR c.statut <> 'BROUILLON') AS disponible
+         FROM ligne_commande l JOIN commande c ON c.id = l.commande_id LEFT JOIN article a ON a.id = l.article_id
         WHERE l.commande_id = $1 ORDER BY l.id`,
       [order.id],
     );

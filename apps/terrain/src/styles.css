@@ -457,6 +457,12 @@ button {
   background: var(--muted-bg);
   font-family: var(--font-serif);
   font-size: 1.6rem;
+  overflow: hidden;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ——— Cartes et formulaires ——— */
