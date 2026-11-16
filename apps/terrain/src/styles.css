@@ -1,67 +1,75 @@
 /*
- * JAMYSTOCK Terrain. Pensé pour un téléphone tenu d'une main, en entrepôt ou dehors au soleil, parfois
- * avec des gants : cibles d'au moins 56 px, texte contrasté, une action principale par écran.
+ * JAMYSTOCK Terrain. Charte : noir et blanc francs, jaune citron pour l'action principale, bordeaux pour
+ * l'alerte, titres en serif éditorial, texte en grotesque, formes en pilule (voir docs/charte-graphique.md).
+ * Pensé pour un téléphone tenu d'une main, au dépôt ou dehors au soleil, parfois avec des gants :
+ * cibles d'au moins 56 px, une action principale par écran.
  */
 :root {
-  --bg: #f4f6f5;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --ink: #12201f;
-  --muted: #4d5d5b;
-  --line: #cfd8d6;
-  --brand: #0f3d3e;
-  --brand-ink: #ffffff;
-  --accent: #f5b83d;
-  --ok: #17703a;
-  --ok-bg: #e2f4e8;
-  --warn: #8a5a00;
-  --warn-bg: #fff3d6;
-  --danger: #b3261e;
-  --danger-bg: #fde7e5;
-  --info: #1d4f91;
-  --info-bg: #e5eefb;
-  --focus: #1d6fe0;
-  --radius: 12px;
+  --muted-bg: #f0f0f0;
+  --ink: #000000;
+  --muted: #4a4a4a;
+  --line: #dcdcdc;
+  --bar: #000000;
+  --bar-ink: #ffffff;
+  --lime: #e5ff31;
+  --lime-ink: #000000;
+  --maroon: #7e2b24;
+  --maroon-ink: #ffffff;
+  --ok: #1d6b3a;
+  --ok-bg: #eaf6ee;
+  --warn: #7a5200;
+  --warn-bg: #fff6d9;
+  --danger: #7e2b24;
+  --danger-bg: #f8e9e7;
+  --info-bg: #f0f0f0;
+  --focus: #2f6bff;
+  --radius: 8px;
+  --pill: 999px;
   --tap: 56px;
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0d1514;
-    --surface: #17211f;
-    --ink: #eef3f2;
-    --muted: #a9b7b4;
-    --line: #2d3b39;
-    --brand: #133f3f;
-    --accent: #f5b83d;
-    --ok: #6ad48f;
-    --ok-bg: #12301e;
-    --warn: #f5c56a;
-    --warn-bg: #3a2c0c;
-    --danger: #ff8a80;
-    --danger-bg: #3d1513;
-    --info: #9cc2ff;
-    --info-bg: #13243d;
-    --focus: #79aaff;
+    --bg: #000000;
+    --surface: #111111;
+    --muted-bg: #1c1c1c;
+    --ink: #ffffff;
+    --muted: #b5b5b5;
+    --line: #333333;
+    --bar: #000000;
+    --ok: #7fdc9f;
+    --ok-bg: #0f2a19;
+    --warn: #ffd36a;
+    --warn-bg: #2e2408;
+    --danger: #ff9b8f;
+    --danger-bg: #3a1411;
+    --info-bg: #1c1c1c;
+    --focus: #8fb0ff;
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #0d1514;
-  --surface: #17211f;
-  --ink: #eef3f2;
-  --muted: #a9b7b4;
-  --line: #2d3b39;
-  --brand: #133f3f;
-  --ok: #6ad48f;
-  --ok-bg: #12301e;
-  --warn: #f5c56a;
-  --warn-bg: #3a2c0c;
-  --danger: #ff8a80;
-  --danger-bg: #3d1513;
-  --info: #9cc2ff;
-  --info-bg: #13243d;
-  --focus: #79aaff;
+  --bg: #000000;
+  --surface: #111111;
+  --muted-bg: #1c1c1c;
+  --ink: #ffffff;
+  --muted: #b5b5b5;
+  --line: #333333;
+  --bar: #000000;
+  --ok: #7fdc9f;
+  --ok-bg: #0f2a19;
+  --warn: #ffd36a;
+  --warn-bg: #2e2408;
+  --danger: #ff9b8f;
+  --danger-bg: #3a1411;
+  --info-bg: #1c1c1c;
+  --focus: #8fb0ff;
   color-scheme: dark;
 }
 
@@ -73,7 +81,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 17px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 400 17px/1.45 var(--font-sans);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -84,14 +92,20 @@ h1,
 h2,
 h3 {
   margin: 0;
-  line-height: 1.2;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 h2 {
-  font-size: 1.1rem;
-  margin: 24px 0 8px;
+  font-size: 1.75rem;
+  margin: 28px 0 12px;
 }
 p {
   margin: 8px 0;
+}
+strong {
+  font-weight: 600;
 }
 :focus-visible {
   outline: 3px solid var(--focus);
@@ -114,34 +128,40 @@ button {
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: var(--tap);
+  gap: 10px;
+  min-height: 60px;
   padding: max(8px, env(safe-area-inset-top)) 12px 8px;
-  background: var(--brand);
-  color: var(--brand-ink);
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-bottom: 1px solid var(--line);
 }
 .topbar h1 {
   flex: 1;
   min-width: 0;
+  font-family: var(--font-sans);
   font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .topbar .brand {
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-  font-size: 0.85rem;
+  letter-spacing: -0.02em;
+  color: var(--lime);
+  font-size: 1.05rem;
+  text-transform: lowercase;
 }
 .topbar .back {
+  flex: none;
   width: 44px;
   height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 0.12);
-  color: var(--brand-ink);
-  font-size: 2rem;
+  border: 1.5px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--bar-ink);
+  font-size: 1.8rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -150,14 +170,14 @@ button {
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  padding: 20px 16px calc(28px + env(safe-area-inset-bottom));
 }
 .actions,
 .footer-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 24px;
+  margin-top: 28px;
 }
 .footer-actions > * {
   flex: 1;
@@ -168,13 +188,13 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 50vw;
+  max-width: 52vw;
   min-height: 36px;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.14);
-  color: var(--brand-ink);
+  padding: 4px 12px;
+  border: 1.5px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--bar-ink);
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
@@ -187,33 +207,41 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #6ad48f;
+  background: var(--lime);
+}
+.sync-badge.waiting {
+  border-color: var(--lime);
 }
 .sync-badge.waiting .dot {
-  background: var(--accent);
+  background: transparent;
+  border: 2px solid var(--lime);
+}
+.sync-badge.offline {
+  border-color: #ff9b8f;
 }
 .sync-badge.offline .dot {
-  background: #ff8a80;
+  background: #ff9b8f;
 }
 .sync-badge .rejected {
   padding: 0 6px;
-  border-radius: 999px;
-  background: #b3261e;
-  color: #fff;
+  border-radius: var(--pill);
+  background: var(--maroon);
+  color: var(--maroon-ink);
 }
 
-/* ——— Boutons ——— */
+/* ——— Boutons (pilules) ——— */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 48px;
-  padding: 10px 18px;
-  border: 2px solid transparent;
-  border-radius: var(--radius);
-  font-weight: 700;
+  padding: 10px 22px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--pill);
+  font-weight: 600;
   text-align: center;
+  text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -221,28 +249,29 @@ button {
   width: 100%;
   min-height: var(--tap);
   margin: 12px 0;
-  font-size: 1.1rem;
+  font-size: 1.08rem;
 }
 .btn.small {
   min-height: 40px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 0.9rem;
 }
 .btn.primary {
-  background: var(--brand);
-  color: var(--brand-ink);
+  background: var(--lime);
+  border-color: var(--lime-ink);
+  color: var(--lime-ink);
 }
 .btn.secondary {
   background: var(--surface);
-  border-color: var(--line);
   color: var(--ink);
 }
 .btn.danger {
-  background: var(--danger);
-  color: #fff;
+  background: var(--maroon);
+  border-color: var(--maroon);
+  color: var(--maroon-ink);
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .btn:not(:disabled):active {
@@ -253,18 +282,19 @@ button {
   padding: 0;
   border: 0;
   background: none;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 /* ——— Messages ——— */
 .banner {
   margin: 12px 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-radius: var(--radius);
-  border-left: 6px solid;
-  font-weight: 600;
+  border-left: 5px solid;
+  font-weight: 500;
 }
 .banner.ok {
   background: var(--ok-bg);
@@ -276,7 +306,7 @@ button {
 }
 .banner.info {
   background: var(--info-bg);
-  border-color: var(--info);
+  border-color: var(--ink);
 }
 .toast {
   position: fixed;
@@ -286,8 +316,8 @@ button {
   bottom: calc(12px + env(safe-area-inset-bottom));
   max-width: 616px;
   margin: 0 auto;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
   border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
   cursor: pointer;
 }
 .toast .banner {
@@ -307,24 +337,36 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .tile {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
-  min-height: 104px;
-  padding: 14px;
-  border: 2px solid var(--line);
+  gap: 16px;
+  min-height: 116px;
+  padding: 16px;
+  border: 0;
   border-radius: var(--radius);
-  background: var(--surface);
-  font-weight: 700;
+  background: var(--muted-bg);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
+.tile:first-child {
+  background: var(--bar);
+  color: var(--bar-ink);
+}
 .tile .icon {
-  font-size: 1.6rem;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--lime);
+  color: var(--lime-ink);
+  font-size: 1.2rem;
 }
 
 /* ——— Listes ——— */
@@ -341,16 +383,16 @@ button {
   gap: 12px;
   width: 100%;
   min-height: var(--tap);
-  padding: 12px 14px;
-  border: 2px solid var(--line);
+  padding: 14px 16px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   text-align: left;
   cursor: pointer;
 }
 .row.selected {
-  border-color: var(--brand);
-  box-shadow: inset 0 0 0 2px var(--brand);
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
 }
 .row-main {
   flex: 1;
@@ -361,25 +403,25 @@ button {
 }
 .row-main small {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
 }
 .row-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 12px;
 }
 .pill {
   flex: none;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  padding: 5px 12px;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 .pill.warn {
-  background: var(--warn-bg);
-  border-color: var(--warn);
+  background: var(--lime);
+  color: var(--lime-ink);
 }
 
 /* Liste de prélèvement : l'emplacement doit se lire de loin */
@@ -387,8 +429,8 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 2px solid var(--line);
+  padding: 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -402,7 +444,7 @@ button {
 }
 .picklist .row-main small {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
 }
 .thumb {
@@ -411,30 +453,26 @@ button {
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 8px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-weight: 800;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
 }
 
 /* ——— Cartes et formulaires ——— */
 .card {
   margin: 12px 0;
-  padding: 14px;
-  border: 2px solid var(--line);
+  padding: 16px;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--muted-bg);
 }
 .card > small {
   display: block;
   color: var(--muted);
 }
-a.btn {
-  text-decoration: none;
-}
 .card.recap {
-  border-color: var(--brand);
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
 }
 .form {
   display: grid;
@@ -443,23 +481,31 @@ a.btn {
 label {
   display: grid;
   gap: 6px;
-  margin: 12px 0;
+  margin: 14px 0;
   font-weight: 600;
 }
 input,
 select,
 textarea {
   width: 100%;
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 2px solid var(--line);
-  border-radius: 10px;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
+  font-weight: 400;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lime) 70%, transparent);
 }
 textarea {
-  min-height: 72px;
+  min-height: 76px;
   resize: vertical;
 }
 .checkbox,
@@ -475,6 +521,21 @@ textarea {
   height: 28px;
   min-height: 0;
   flex: none;
+  accent-color: var(--ink);
+}
+button.check {
+  flex: none;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.pick.ok button.check {
+  background: var(--ink);
+  color: var(--lime);
 }
 .dims {
   display: grid;
@@ -489,14 +550,14 @@ textarea {
   padding-left: 20px;
 }
 
-/* ——— Choix (gros boutons) ——— */
+/* ——— Choix (onglets en pilule, actif en noir) ——— */
 .choice {
-  margin: 12px 0;
+  margin: 14px 0;
   padding: 0;
   border: 0;
 }
 .choice legend {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-weight: 600;
 }
 .choice-grid {
@@ -510,29 +571,28 @@ textarea {
   justify-content: center;
   gap: 8px;
   min-height: var(--tap);
-  padding: 8px;
-  border: 2px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-weight: 700;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
+  font-weight: 500;
   cursor: pointer;
 }
 .choice-grid button.selected {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--brand-ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
 }
 
 /* ——— Scanner ——— */
 .scanner {
   margin: 12px 0;
-  padding: 12px;
+  padding: 16px;
   border-radius: var(--radius);
-  background: var(--surface);
-  border: 2px dashed var(--line);
+  background: var(--muted-bg);
 }
 .scanner-label {
-  font-weight: 700;
+  font-weight: 600;
 }
 .scanner-video {
   position: relative;
@@ -544,38 +604,38 @@ textarea {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: #000;
 }
 .scanner-frame {
   position: absolute;
   inset: 18% 18% calc(18% + 56px);
-  border: 4px solid var(--accent);
+  border: 4px solid var(--lime);
   border-radius: 16px;
-  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.25);
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.3);
   pointer-events: none;
 }
 .scanner-manual {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 .scanner-manual input {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   text-transform: uppercase;
 }
 .scanner-manual input::placeholder {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   text-transform: none;
 }
 .scan-error {
   color: var(--danger);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* ——— Photos ——— */
 .photos {
-  margin: 12px 0;
+  margin: 14px 0;
 }
 .photos-head {
   display: flex;
@@ -598,7 +658,7 @@ textarea {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 .photos-grid figure button {
   position: absolute;
@@ -608,17 +668,17 @@ textarea {
   height: 36px;
   border: 0;
   border-radius: 50%;
-  background: rgb(0 0 0 / 0.6);
+  background: rgb(0 0 0 / 0.7);
   color: #fff;
   font-size: 1.3rem;
   cursor: pointer;
 }
 .photo-add {
   aspect-ratio: 1;
-  border: 2px dashed var(--line);
-  border-radius: 10px;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--radius);
   background: var(--surface);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -626,61 +686,70 @@ textarea {
 .signature {
   display: grid;
   gap: 8px;
-  margin: 12px 0;
+  margin: 14px 0;
 }
 .signature svg {
   width: 100%;
   aspect-ratio: 600 / 240;
-  border: 2px solid var(--line);
+  border: 1.5px solid var(--ink);
   border-radius: var(--radius);
   background: #fff;
   touch-action: none;
 }
 .signature-line {
-  stroke: #9aa8a6;
+  stroke: #a0a0a0;
   stroke-width: 2;
   stroke-dasharray: 6 6;
 }
 .signature-ink {
   fill: none;
-  stroke: #0b1a33;
+  stroke: #000;
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* ——— Connexion ——— */
+/* ——— Connexion : fond noir, grande signature en minuscules ——— */
 .login {
   min-height: 100dvh;
   display: grid;
   align-content: center;
-  gap: 24px;
+  gap: 32px;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 32px 16px;
+  color: #fff;
+}
+body:has(.login) {
+  background: #000;
 }
 .login-brand {
   display: grid;
-  gap: 2px;
-  text-align: center;
+  gap: 4px;
 }
 .login-brand strong {
-  font-size: 1.8rem;
-  letter-spacing: 0.08em;
-  color: var(--brand);
+  font-size: clamp(3rem, 16vw, 4.5rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  text-transform: lowercase;
 }
 .login-brand span {
-  color: var(--muted);
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  color: var(--lime);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .login-brand strong {
-    color: var(--accent);
-  }
+.login label {
+  color: #fff;
 }
-:root[data-theme='dark'] .login-brand strong {
-  color: var(--accent);
+.login input {
+  background: #111;
+  border-color: #3a3a3a;
+  color: #fff;
+}
+.login input:focus {
+  border-color: var(--lime);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -688,4 +757,7 @@ textarea {
     transition: none !important;
     animation: none !important;
   }
+}
+.login .banner {
+  color: var(--ink);
 }

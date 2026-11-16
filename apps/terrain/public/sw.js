@@ -3,7 +3,7 @@
  * pour qu'elle s'ouvre sans réseau. Les appels /api ne passent jamais par le cache : les données
  * hors-ligne vivent dans IndexedDB, sous le contrôle de l'appli.
  */
-const CACHE = 'terrain-shell-v1';
+const CACHE = 'terrain-shell-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

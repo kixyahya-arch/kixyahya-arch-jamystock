@@ -138,4 +138,5 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.
 
-Voir [docs/points-ouverts.md](docs/points-ouverts.md) pour les questions à trancher avec le client et les hypothèses prises.
+Voir [docs/points-ouverts.md](docs/points-ouverts.md) pour les questions à trancher avec le client et les hypothèses prises,
+et [docs/charte-graphique.md](docs/charte-graphique.md) pour la charte visuelle commune aux trois applis.
