@@ -5,7 +5,6 @@
  * dans une file ordonnée. Une action porte une clé d'idempotence : la renvoyer après une coupure réseau
  * renvoie la même réponse sans rien rejouer.
  */
-import { fingerprint } from './ids.js';
 import type { ArticleCondition } from './article-state.js';
 
 export interface GpsFix {
@@ -133,9 +132,6 @@ export function blContent(p: Omit<BlSignPayload, 'empreinte' | 'gps'>) {
   };
 }
 
-export function blFingerprint(p: Omit<BlSignPayload, 'empreinte' | 'gps'>): string {
-  return fingerprint(blContent(p));
-}
 
 export function pickupContent(p: Omit<PickupSignPayload, 'empreinte' | 'gps'>) {
   return {
@@ -150,9 +146,6 @@ export function pickupContent(p: Omit<PickupSignPayload, 'empreinte' | 'gps'>) {
   };
 }
 
-export function pickupFingerprint(p: Omit<PickupSignPayload, 'empreinte' | 'gps'>): string {
-  return fingerprint(pickupContent(p));
-}
 
 /** Tri des prélèvements par chemin dans le dépôt (PRP-01) : Zone > Allée > Emplacement, ordre naturel. */
 export function sortByPath<T extends { chemin: string | null }>(items: T[]): T[] {

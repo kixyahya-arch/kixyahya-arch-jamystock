@@ -34,3 +34,6 @@ par un test, pour pouvoir être changée sans toucher au reste.
 | Bien sans étiquette à l'enlèvement | Il reçoit un QR provisoire interne (`P-…`) ; l'étiquette définitive est posée à la réception. | `field.service.ts` |
 | Capacité | Contrôle surface et charge à l'emplacement ; un objet empilable compte pour moitié de son empreinte. Dépassement forçable avec motif (alerte superviseur). | `field.service.ts` |
 | PDF du BL | Le BL signé est scellé en base (empreinte SHA-256, GPS, terminal) ; le PDF/A et le cachet serveur sont générés par le worker documents (phase D). | — |
+| Vignettes terrain | La liste de prélèvement affiche l'initiale de l'article à la place de la vignette : la diffusion des photos (URL signées 15 min, §7.3) et la génération des vignettes arrivent avec l'Espace Client. | `Picking.tsx` |
+| Pré-chargement | Le terminal pré-charge ses missions et leurs détails à l'ouverture de l'accueil ; hors réseau, il travaille sur ce dernier chargement. | `data.ts` |
+| Session terrain | Si le renouvellement du jeton échoue, le terminal revient à l'écran de connexion sans perdre sa file d'envoi, qui repart à la reconnexion. | `api.ts` |

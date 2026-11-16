@@ -1,0 +1,763 @@
+/*
+ * JAMYSTOCK Terrain. Charte : noir et blanc francs, jaune citron pour l'action principale, bordeaux pour
+ * l'alerte, titres en serif éditorial, texte en grotesque, formes en pilule (voir docs/charte-graphique.md).
+ * Pensé pour un téléphone tenu d'une main, au dépôt ou dehors au soleil, parfois avec des gants :
+ * cibles d'au moins 56 px, une action principale par écran.
+ */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --muted-bg: #f0f0f0;
+  --ink: #000000;
+  --muted: #4a4a4a;
+  --line: #dcdcdc;
+  --bar: #000000;
+  --bar-ink: #ffffff;
+  --lime: #e5ff31;
+  --lime-ink: #000000;
+  --maroon: #7e2b24;
+  --maroon-ink: #ffffff;
+  --ok: #1d6b3a;
+  --ok-bg: #eaf6ee;
+  --warn: #7a5200;
+  --warn-bg: #fff6d9;
+  --danger: #7e2b24;
+  --danger-bg: #f8e9e7;
+  --info-bg: #f0f0f0;
+  --focus: #2f6bff;
+  --radius: 8px;
+  --pill: 999px;
+  --tap: 56px;
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #000000;
+    --surface: #111111;
+    --muted-bg: #1c1c1c;
+    --ink: #ffffff;
+    --muted: #b5b5b5;
+    --line: #333333;
+    --bar: #000000;
+    --ok: #7fdc9f;
+    --ok-bg: #0f2a19;
+    --warn: #ffd36a;
+    --warn-bg: #2e2408;
+    --danger: #ff9b8f;
+    --danger-bg: #3a1411;
+    --info-bg: #1c1c1c;
+    --focus: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #000000;
+  --surface: #111111;
+  --muted-bg: #1c1c1c;
+  --ink: #ffffff;
+  --muted: #b5b5b5;
+  --line: #333333;
+  --bar: #000000;
+  --ok: #7fdc9f;
+  --ok-bg: #0f2a19;
+  --warn: #ffd36a;
+  --warn-bg: #2e2408;
+  --danger: #ff9b8f;
+  --danger-bg: #3a1411;
+  --info-bg: #1c1c1c;
+  --focus: #8fb0ff;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 17px/1.45 var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+#root {
+  min-height: 100dvh;
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+h2 {
+  font-size: 1.75rem;
+  margin: 28px 0 12px;
+}
+p {
+  margin: 8px 0;
+}
+strong {
+  font-weight: 600;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ——— Structure ——— */
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-bottom: 1px solid var(--line);
+}
+.topbar h1 {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar .brand {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--lime);
+  font-size: 1.05rem;
+  text-transform: lowercase;
+}
+.topbar .back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--bar-ink);
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.content {
+  flex: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px calc(28px + env(safe-area-inset-bottom));
+}
+.actions,
+.footer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.footer-actions > * {
+  flex: 1;
+}
+
+/* ——— Pastille de synchronisation ——— */
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 52vw;
+  min-height: 36px;
+  padding: 4px 12px;
+  border: 1.5px solid rgb(255 255 255 / 0.4);
+  border-radius: var(--pill);
+  background: transparent;
+  color: var(--bar-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.sync-badge .dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lime);
+}
+.sync-badge.waiting {
+  border-color: var(--lime);
+}
+.sync-badge.waiting .dot {
+  background: transparent;
+  border: 2px solid var(--lime);
+}
+.sync-badge.offline {
+  border-color: #ff9b8f;
+}
+.sync-badge.offline .dot {
+  background: #ff9b8f;
+}
+.sync-badge .rejected {
+  padding: 0 6px;
+  border-radius: var(--pill);
+  background: var(--maroon);
+  color: var(--maroon-ink);
+}
+
+/* ——— Boutons (pilules) ——— */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 22px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--pill);
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn.big {
+  width: 100%;
+  min-height: var(--tap);
+  margin: 12px 0;
+  font-size: 1.08rem;
+}
+.btn.small {
+  min-height: 40px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+}
+.btn.primary {
+  background: var(--lime);
+  border-color: var(--lime-ink);
+  color: var(--lime-ink);
+}
+.btn.secondary {
+  background: var(--surface);
+  color: var(--ink);
+}
+.btn.danger {
+  background: var(--maroon);
+  border-color: var(--maroon);
+  color: var(--maroon-ink);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+.link {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ——— Messages ——— */
+.banner {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border-left: 5px solid;
+  font-weight: 500;
+}
+.banner.ok {
+  background: var(--ok-bg);
+  border-color: var(--ok);
+}
+.banner.error {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+.banner.info {
+  background: var(--info-bg);
+  border-color: var(--ink);
+}
+.toast {
+  position: fixed;
+  z-index: 50;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  max-width: 616px;
+  margin: 0 auto;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+}
+.toast .banner {
+  margin: 0;
+}
+.hint {
+  color: var(--muted);
+}
+.hint.warn,
+.warn {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* ——— Accueil ——— */
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 116px;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.tile:first-child {
+  background: var(--bar);
+  color: var(--bar-ink);
+}
+.tile .icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--lime);
+  color: var(--lime-ink);
+  font-size: 1.2rem;
+}
+
+/* ——— Listes ——— */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.row.selected {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-main small {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.pill {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.pill.warn {
+  background: var(--lime);
+  color: var(--lime-ink);
+}
+
+/* Liste de prélèvement : l'emplacement doit se lire de loin */
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.pick.ok {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+}
+.pick.ko {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.picklist .row-main small {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+}
+
+/* ——— Cartes et formulaires ——— */
+.card {
+  margin: 12px 0;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+}
+.card > small {
+  display: block;
+  color: var(--muted);
+}
+.card.recap {
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+}
+.form {
+  display: grid;
+  gap: 12px;
+}
+label {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  font-weight: 600;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lime) 70%, transparent);
+}
+textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.checkbox,
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+.checkbox input,
+.check input {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  flex: none;
+  accent-color: var(--ink);
+}
+button.check {
+  flex: none;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.pick.ok button.check {
+  background: var(--ink);
+  color: var(--lime);
+}
+.dims {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.dims label {
+  margin: 0;
+}
+.constraints {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+/* ——— Choix (onglets en pilule, actif en noir) ——— */
+.choice {
+  margin: 14px 0;
+  padding: 0;
+  border: 0;
+}
+.choice legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.choice-grid button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
+  font-weight: 500;
+  cursor: pointer;
+}
+.choice-grid button.selected {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* ——— Scanner ——— */
+.scanner {
+  margin: 12px 0;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+}
+.scanner-label {
+  font-weight: 600;
+}
+.scanner-video {
+  position: relative;
+  margin: 10px 0;
+  display: grid;
+  gap: 8px;
+}
+.scanner-video video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: #000;
+}
+.scanner-frame {
+  position: absolute;
+  inset: 18% 18% calc(18% + 56px);
+  border: 4px solid var(--lime);
+  border-radius: 16px;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+.scanner-manual {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.scanner-manual input {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+.scanner-manual input::placeholder {
+  font-family: var(--font-sans);
+  text-transform: none;
+}
+.scan-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ——— Photos ——— */
+.photos {
+  margin: 14px 0;
+}
+.photos-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.photos-grid figure {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+}
+.photos-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+.photos-grid figure button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.7);
+  color: #fff;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.photo-add {
+  aspect-ratio: 1;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ——— Signature ——— */
+.signature {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+.signature svg {
+  width: 100%;
+  aspect-ratio: 600 / 240;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fff;
+  touch-action: none;
+}
+.signature-line {
+  stroke: #a0a0a0;
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+}
+.signature-ink {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ——— Connexion : fond noir, grande signature en minuscules ——— */
+.login {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 32px 16px;
+  color: #fff;
+}
+body:has(.login) {
+  background: #000;
+}
+.login-brand {
+  display: grid;
+  gap: 4px;
+}
+.login-brand strong {
+  font-size: clamp(3rem, 16vw, 4.5rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  text-transform: lowercase;
+}
+.login-brand span {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  color: var(--lime);
+}
+.login label {
+  color: #fff;
+}
+.login input {
+  background: #111;
+  border-color: #3a3a3a;
+  color: #fff;
+}
+.login input:focus {
+  border-color: var(--lime);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+.login .banner {
+  color: var(--ink);
+}

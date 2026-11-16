@@ -166,7 +166,7 @@ describe('alertes forfait (§6.2)', () => {
 
 describe('contrat de synchronisation terrain', () => {
   it('empreinte de BL stable quel que soit l’ordre de saisie', async () => {
-    const { blFingerprint, sortByPath } = await import('../src/sync.js');
+    const { blFingerprint, sortByPath } = await import('../src/index.js');
     const base = {
       blId: 'b', missionId: 'm', signatureSvg: '<svg/>', signedAt: '2027-01-18T09:00:00Z',
       signataire: { nom: 'A', qualite: 'Chef de chantier' },
