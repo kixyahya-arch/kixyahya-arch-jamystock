@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+  // servie sous /terrain/ en production, à côté de l'Espace Client
+  base: '/terrain/',
   plugins: [react()],
   resolve: {
     alias: { '@jamystock/domain/browser': fileURLToPath(new URL('../../packages/domain/src/browser.ts', import.meta.url)) },

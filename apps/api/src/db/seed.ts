@@ -5,7 +5,7 @@ import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
 
 /**
  * Données de démonstration : 1 exploitant, 1 dépôt, 2 clients B2B + 1 client B2C, un compte par rôle.
- * Mot de passe commun : « demo-jamystock ».
+ * Mot de passe commun : « demo-jamystock », ou DEMO_PASSWORD s'il est fourni (démo en ligne : le dépôt est public).
  */
 export interface SeedResult {
   tenantId: string;
@@ -18,7 +18,7 @@ export interface SeedResult {
   password: string;
 }
 
-export const DEMO_PASSWORD = 'demo-jamystock';
+export const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'demo-jamystock';
 
 export async function seed(databaseUrl: string): Promise<SeedResult> {
   const client = new pg.Client({ connectionString: databaseUrl });

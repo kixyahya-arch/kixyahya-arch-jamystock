@@ -8,6 +8,8 @@ export interface AppConfig {
   defaultTenantId: string | null;
   /** Répertoire de stockage local des fichiers (dev) */
   storageDir: string;
+  /** Builds des applis web à servir par l'API (mise en ligne sur une seule adresse) */
+  frontends: { client?: string; terrain?: string };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -23,5 +25,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     refreshTokenTtlDays: 30,
     defaultTenantId: env.TENANT_ID ?? null,
     storageDir: env.STORAGE_DIR ?? '.storage',
+    frontends: { client: env.CLIENT_DIST || undefined, terrain: env.TERRAIN_DIST || undefined },
   };
 }
