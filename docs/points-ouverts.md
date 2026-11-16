@@ -30,3 +30,7 @@ par un test, pour pouvoir être changée sans toucher au reste.
 | Statut RESERVE | Un article passe RESERVE à la soumission de la commande (et redevient EN_STOCK à l'annulation). Ce n'est pas un mouvement physique, il n'est donc pas journalisé dans `mouvement` mais dans l'audit de la commande. | `orders.service.ts` |
 | Panier | Le panier n'est pas une commande « active » : il ne bloque pas l'article. Le verrou est pris à la soumission (index unique partiel). | `001_init.sql` |
 | Multi-dépôts | Une commande de restitution ne regroupe que des articles d'un même dépôt. | `orders.service.ts` |
+| Article refusé | Un article refusé à la livraison reste « en transit » jusqu'au scan `RETURN` au dépôt, puis repasse en réception pour être rangé. | `field.service.ts` |
+| Bien sans étiquette à l'enlèvement | Il reçoit un QR provisoire interne (`P-…`) ; l'étiquette définitive est posée à la réception. | `field.service.ts` |
+| Capacité | Contrôle surface et charge à l'emplacement ; un objet empilable compte pour moitié de son empreinte. Dépassement forçable avec motif (alerte superviseur). | `field.service.ts` |
+| PDF du BL | Le BL signé est scellé en base (empreinte SHA-256, GPS, terminal) ; le PDF/A et le cachet serveur sont générés par le worker documents (phase D). | — |

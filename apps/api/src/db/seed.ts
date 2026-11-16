@@ -13,6 +13,7 @@ export interface SeedResult {
   projets: { tilleuls: string; jardins: string; autre: string };
   articles: { tilleuls: string[]; jardins: string[]; autre: string[]; particulier: string[] };
   depotId: string;
+  vehicules: { vul12: string; vul20: string };
   password: string;
 }
 
@@ -190,6 +191,14 @@ export async function seed(databaseUrl: string): Promise<SeedResult> {
     for (let i = 1; i <= 3; i++) articles.autre.push(await article(autre, projAutre, `Carton archives ${i}`, cCarton, [0.6, 0.4, 0.4], true, true));
     for (let i = 1; i <= 3; i++) articles.particulier.push(await article(particulier, null, `Carton déménagement ${i}`, cCarton, [0.6, 0.4, 0.4], true, true));
 
+    // --- véhicules (CMD-04, FLX-03)
+    const vehicules = { vul12: uuidv7(), vul20: uuidv7() };
+    await q(
+      `INSERT INTO vehicule (id, tenant_id, immatriculation, type, volume_m3, charge_utile_kg, hayon)
+       VALUES ($1,$3,'GA-123-AA','VUL12',12,1200,true), ($2,$3,'GB-456-BB','VUL20',20,1500,true)`,
+      [vehicules.vul12, vehicules.vul20, tenantId],
+    );
+
     await q('COMMIT');
     return {
       tenantId,
@@ -198,6 +207,7 @@ export async function seed(databaseUrl: string): Promise<SeedResult> {
       projets: { tilleuls, jardins, autre: projAutre },
       articles,
       depotId,
+      vehicules,
       password: DEMO_PASSWORD,
     };
   } catch (err) {

@@ -6,6 +6,8 @@ export interface AppConfig {
   refreshTokenTtlDays: number;
   /** Organisation exploitante par défaut (mono-tenant au MVP, multi-tenant prévu : O12). */
   defaultTenantId: string | null;
+  /** Répertoire de stockage local des fichiers (dev) */
+  storageDir: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -20,5 +22,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     accessTokenTtlSeconds: 15 * 60, // §7.3 : jetons d'accès courts (15 min)
     refreshTokenTtlDays: 30,
     defaultTenantId: env.TENANT_ID ?? null,
+    storageDir: env.STORAGE_DIR ?? '.storage',
   };
 }

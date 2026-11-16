@@ -81,12 +81,39 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | POST | `/api/v1/orders/:id/plan`, `/counter-propose` | Dispatcher | FLX-02 |
 | POST | `/api/v1/orders/:id/accept-date` | clients | FLX-02 |
 | GET | `/api/v1/orders`, `/orders/:id` | tous | SUI-01 |
+| GET | `/api/v1/missions`, POST `/missions/:id/assign` | Dispatcher | FLX-01, FLX-03 |
+| POST | `/api/v1/labels/blank` | Opérateur, Super Admin | O1, WMS-03 |
+| GET | `/api/v1/field/bootstrap` | terrain | §7.5 pré-chargement, LIV-01 |
+| GET | `/api/v1/field/receptions`, `/field/missions/:id` | terrain | REC-01, PRP-01 |
+| POST | `/api/v1/field/sync` | terrain | §7.5 (toutes les actions ci-dessous) |
+| PUT | `/api/v1/field/photos/:id` | terrain | REC-02, §7.6 |
+
+### App terrain : file d'actions hors-ligne
+
+Le terminal enregistre chaque geste en local puis envoie une file ordonnée à `POST /field/sync`. Chaque action porte
+une clé d'idempotence et son horodatage terminal ; le serveur les rejoue dans l'ordre chronologique, chacune dans sa
+transaction, et mémorise la réponse (un renvoi après coupure ne rejoue rien). La dérive d'horloge au-delà de 2 min
+est corrigée et signalée. Si un déplacement arrive après un déplacement plus récent du même article, il est journalisé
+sans modifier la position et une alerte de réconciliation est créée. Le contrat est typé dans `packages/domain/src/sync.ts`.
+
+| Action | Rôle | Exigence |
+|---|---|---|
+| `ARTICLE_CREATE` (QR vierge ou QR posé à l'enlèvement, 1 à 6 photos) | Opérateur | REC-02, §4.1 |
+| `ARTICLE_STORE`, `TRANSFER` (contrôle zone, surface et charge, forçage avec motif) | Opérateur | REC-03, RG-STK-01 |
+| `UM_CREATE`, `UM_ADD`, `UM_STORE` | Opérateur | REC-04 |
+| `RECEPTION_CLOSE` (collecte → STOCKEE, email récapitulatif) | Opérateur | §4.1 |
+| `PICK`, `PICK_MISSING`, `PICK_COMPLETE` | Opérateur | PRP-01, PRP-02 |
+| `LOAD` (statut En transit, départ bloqué si incomplet) | Opérateur | PRP-03 |
+| `DEPART`, `ARRIVE` (contrôle GPS à 500 m) | Chauffeur | LIV-01, §4.3 |
+| `BL_SIGN` (empreinte SHA-256 vérifiée, réserves, refus, retrait au comptoir) | Chauffeur, Opérateur | LIV-03, LIV-04 |
+| `PICKUP_SIGN` (BL d'enlèvement, articles ATTENDU) | Chauffeur | LIV-06 |
+| `RETURN` (article refusé de retour au dépôt) | Opérateur | §4.3 |
 
 ## Feuille de route
 
 - **A. Socle** (fait) : monorepo, domaine, schéma, auth, RBAC + RLS, audit, panier et commandes, CI.
-- **B. Tranche verticale** : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
-  livraison avec signature du BL et empreinte SHA-256, Espace Client (inventaire, panier, suivi) et Back-Office (dispatch).
+- **B. Tranche verticale** (API terrain faite) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
+  livraison avec signature du BL et empreinte SHA-256. Restent les écrans : PWA terrain, Espace Client (inventaire, panier, suivi) et Back-Office (dispatch).
 - **C. Facturation** : instantané m² quotidien, factures mensuelles et avoirs, Stripe.
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.
