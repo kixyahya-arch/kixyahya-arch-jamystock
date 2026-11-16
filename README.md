@@ -51,7 +51,7 @@ pnpm db:migrate
 pnpm db:seed                            # affiche le TENANT_ID à reporter dans .env
 pnpm --filter @jamystock/domain build
 pnpm dev:api                            # http://localhost:3000
-pnpm --filter @jamystock/terrain dev    # app terrain sur http://localhost:5173 (relaie /api vers :3000)
+pnpm --filter @jamystock/terrain dev    # app terrain sur http://localhost:5173/terrain/ (relaie /api vers :3000)
 pnpm --filter @jamystock/client dev     # Espace Client sur http://localhost:5174
 ```
 
@@ -62,6 +62,35 @@ Comptes de démonstration (mot de passe `demo-jamystock`) : `admin@jamystock.tes
 `dispatch@jamystock.test`, `operateur@jamystock.test`, `chauffeur@jamystock.test`, `dsg@horizon.test` (B2B Admin),
 `chef.projet@horizon.test` et `conducteur@horizon.test` (B2B Utilisateurs), `admin@batir.test` (autre client B2B),
 `camille@exemple.test` (B2C).
+
+## Mise en ligne
+
+Une seule adresse : l'API sert aussi l'Espace Client (`/`) et l'app terrain (`/terrain/`), si `CLIENT_DIST` et
+`TERRAIN_DIST` pointent vers leurs builds. Pas de CORS ni de proxy à configurer.
+
+**Render (démo)** : le fichier [render.yaml](render.yaml) décrit tout. Dans Render : *New > Blueprint*, choisir ce dépôt,
+saisir le mot de passe des comptes de démonstration (`DEMO_PASSWORD`, le dépôt étant public), valider.
+Render crée la base PostgreSQL 16 (Francfort) et le service web, génère `JWT_SECRET` et `APP_DB_PASSWORD`, puis déploie
+la branche `main` à chaque fusion.
+
+Au démarrage, `apps/api/dist/src/db/provision.js` prépare la base avec l'URL propriétaire (`DATABASE_URL`) :
+extensions, rôles `jamystock_app` / `jamystock_api`, migrations, données de démonstration si `SEED_DEMO=true` et la base
+est vide. Il se relance sans effet de bord. L'API se connecte ensuite avec `jamystock_api` (URL dérivée de `DATABASE_URL`
+et `APP_DB_PASSWORD`) et **refuse de démarrer** avec un rôle superutilisateur ou `BYPASSRLS`. Sans `TENANT_ID`,
+l'organisation unique de la base est prise.
+
+Ailleurs (VM, Docker, autre PaaS) : même principe.
+
+```bash
+pnpm install --frozen-lockfile && pnpm build
+DATABASE_URL=… APP_DB_PASSWORD=… JWT_SECRET=… CLIENT_DIST=apps/client/dist TERRAIN_DIST=apps/terrain/dist \
+  sh -c 'node apps/api/dist/src/db/provision.js && node apps/api/dist/src/main.js'
+```
+
+Offre gratuite de Render : le service s'endort après 15 min sans visite (réveil en une minute environ), la base gratuite
+expire au bout de 30 jours (passer en *basic-256mb*), et sans disque persistant les photos prises sur le terrain sont
+perdues au redémarrage (les illustrations de démonstration sont réécrites). Pour un vrai pilote : offre *starter*, disque
+monté sur `STORAGE_DIR`, ou stockage objet S3 (prévu).
 
 ## Tests
 

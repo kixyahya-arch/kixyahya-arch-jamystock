@@ -1,0 +1,47 @@
+# Démo en ligne JAMYSTOCK sur Render (Blueprint) : Dashboard Render > New > Blueprint > ce dépôt.
+# Un seul service web sert l'API, l'Espace Client (/) et l'app terrain (/terrain/).
+# Au démarrage, provision.js prépare la base (rôles, schéma, données de démo) ; il se relance sans effet de bord.
+databases:
+  - name: jamystock-db
+    plan: free # gratuit 30 jours, puis passer en basic-256mb (~6 $/mois) depuis le tableau de bord
+    region: frankfurt
+    postgresMajorVersion: "16"
+    databaseName: jamystock
+    user: jamystock_owner
+    ipAllowList: [] # pas d'accès depuis Internet : seul le service web s'y connecte (réseau privé Render)
+
+services:
+  - type: web
+    name: jamystock
+    runtime: node
+    plan: free # s'endort après 15 min sans visite (réveil ~1 min) ; starter (7 $/mois) pour rester éveillé
+    region: frankfurt
+    branch: main
+    buildCommand: npx --yes pnpm@10.28.0 install --frozen-lockfile && npx --yes pnpm@10.28.0 build
+    startCommand: node apps/api/dist/src/db/provision.js && node apps/api/dist/src/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # URL propriétaire : sert uniquement à provision.js ; l'API se connecte avec le rôle jamystock_api (soumis à la RLS)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jamystock-db
+          property: connectionString
+      - key: APP_DB_PASSWORD
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_DEMO
+        value: "true"
+      # Mot de passe des comptes de démonstration, demandé à la création (le dépôt est public)
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: CLIENT_DIST
+        value: apps/client/dist
+      - key: TERRAIN_DIST
+        value: apps/terrain/dist
+      # Sans disque persistant (offre gratuite), les photos prises sur le terrain sont perdues au redémarrage ;
+      # les illustrations de démonstration sont réécrites à chaque démarrage.
+      - key: STORAGE_DIR
+        value: .storage

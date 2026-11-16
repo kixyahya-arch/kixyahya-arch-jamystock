@@ -1,9 +1,15 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import pg from 'pg';
 
-const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations', import.meta.url));
+/** Dossier des migrations : `apps/api/migrations`, que l'on tourne depuis `src/db` (tsx) ou `dist/src/db` (build). */
+const MIGRATIONS_DIR =
+  process.env.MIGRATIONS_DIR ||
+  ['../../migrations', '../../../migrations']
+    .map((rel) => fileURLToPath(new URL(rel, import.meta.url)))
+    .find((dir) => existsSync(dir))!;
 
 /** Applique les migrations SQL dans l'ordre, chacune dans sa transaction. */
 export async function migrate(databaseUrl: string, log: (m: string) => void = console.log): Promise<string[]> {
