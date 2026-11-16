@@ -21,9 +21,11 @@ apps/terrain      PWA hors-ligne (Vite + React) : réception, déplacement, pré
                   livraison signée, collecte. Base locale IndexedDB et file d'envoi ordonnée.
 apps/client       Espace Client (Vite + React) : stock en vignettes, fiche, filtres, jauge m², panier,
                   livraison ou retrait, suivi et validation des commandes, demande de collecte.
+apps/admin        Back-Office (Vite + React) : demandes en Kanban, confirmation des dates, planning
+                  des missions par ressource, comptes clients, stock global.
 ```
 
-À venir : Back-Office (dispatch, administration, facturation), workers BullMQ.
+À venir : Back-Office (entrepôt, facturation), workers BullMQ.
 
 ### Principes clés
 
@@ -53,6 +55,7 @@ pnpm --filter @jamystock/domain build
 pnpm dev:api                            # http://localhost:3000
 pnpm --filter @jamystock/terrain dev    # app terrain sur http://localhost:5173/terrain/ (relaie /api vers :3000)
 pnpm --filter @jamystock/client dev     # Espace Client sur http://localhost:5174
+pnpm --filter @jamystock/admin dev      # Back-Office sur http://localhost:5175/admin/ (admin@ ou dispatch@jamystock.test)
 ```
 
 Sur téléphone, la caméra exige HTTPS (ou `localhost`) : passer par un tunnel HTTPS ou utiliser la saisie
@@ -65,8 +68,8 @@ Comptes de démonstration (mot de passe `demo-jamystock`) : `admin@jamystock.tes
 
 ## Mise en ligne
 
-Une seule adresse : l'API sert aussi l'Espace Client (`/`) et l'app terrain (`/terrain/`), si `CLIENT_DIST` et
-`TERRAIN_DIST` pointent vers leurs builds. Pas de CORS ni de proxy à configurer.
+Une seule adresse : l'API sert aussi l'Espace Client (`/`), l'app terrain (`/terrain/`) et le Back-Office (`/admin/`),
+si `CLIENT_DIST`, `TERRAIN_DIST` et `ADMIN_DIST` pointent vers leurs builds. Pas de CORS ni de proxy à configurer.
 
 **Render (démo)** : le fichier [render.yaml](render.yaml) décrit tout. Dans Render : *New > Blueprint*, choisir ce dépôt,
 saisir le mot de passe des comptes de démonstration (`DEMO_PASSWORD`, le dépôt étant public), valider.
@@ -168,7 +171,11 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 - **A. Socle** (fait) : monorepo, domaine, schéma, auth, RBAC + RLS, audit, panier et commandes, CI.
 - **B. Tranche verticale** (faite) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
   livraison avec signature du BL et empreinte SHA-256, Espace Client (stock, jauge m², panier, suivi, collecte).
-  Reste : Back-Office (tableau de bord dispatch, affectation, contre-proposition).
+  Back-Office (fait) : tableau de bord des demandes en Kanban ou liste avec badge urgent (FLX-01), confirmation ou
+  contre-proposition de date (FLX-02), planning par ressource avec glisser-déposer et contrôle de capacité (FLX-03),
+  comptes clients avec SIRET contrôlé, projets et forfait (CLI-01), stock global. Avec `SEED_DEMO=true`, cinq demandes
+  de démonstration sont créées par le vrai parcours.
+  Reste au Back-Office : dépôts et emplacements (WMS-01 à 03), corrections de stock (WMS-06), facturation (FAC).
 - **C. Facturation** : instantané m² quotidien, factures mensuelles et avoirs, Stripe.
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.

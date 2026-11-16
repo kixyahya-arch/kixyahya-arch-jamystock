@@ -43,7 +43,7 @@ export class ClientController {
   @RequirePermission('inventory.read')
   surface(@CurrentUser() user: AuthUser) {
     this.clientOnly(user);
-    return this.db.tx(ctxOf(user), async (tx) => liveSurface(tx, user));
+    return this.db.tx(ctxOf(user), async (tx) => liveSurface(tx, user.entrepriseId!, user.role !== 'B2B_USER'));
   }
 }
 
@@ -58,15 +58,18 @@ interface LocRow {
   projet_id: string | null;
 }
 
-async function liveSurface(tx: Tx, user: AuthUser) {
-  const companyWide = user.role !== 'B2B_USER';
+/**
+ * Surface en temps réel d'une entreprise. companyWide = false pour un B2B_USER : seuls ses projets (RLS),
+ * sans UM ni emplacement dédié ni forfait. Le Back-Office l'appelle pour chaque client (personnel : RLS ouverte).
+ */
+export async function liveSurface(tx: Tx, entrepriseId: string, companyWide = true) {
   const forfait = companyWide
     ? (
         await tx.query<{ m2_inclus: number; coefficient_degagement: number; m2_minimum: number; mode_surface: string }>(
           `SELECT m2_inclus, coefficient_degagement, m2_minimum, mode_surface FROM forfait
             WHERE entreprise_id = $1 AND statut = 'ACTIF' AND date_debut <= current_date AND (date_fin IS NULL OR date_fin >= current_date)
             ORDER BY version DESC LIMIT 1`,
-          [user.entrepriseId],
+          [entrepriseId],
         )
       ).rows[0]
     : undefined;
@@ -75,7 +78,8 @@ async function liveSurface(tx: Tx, user: AuthUser) {
   const articles = await tx.query<LocRow>(
     `SELECT em.id AS emplacement_id, em.type, em.surface_m2, em.niveaux, a.longueur_m, a.largeur_m, a.empilable, a.projet_id
        FROM article a JOIN emplacement em ON em.id = a.emplacement_courant_id JOIN zone z ON z.id = em.zone_id
-      WHERE a.statut IN ${PRESENT} AND a.um_courante_id IS NULL AND z.type = 'STOCKAGE'`,
+      WHERE a.statut IN ${PRESENT} AND a.um_courante_id IS NULL AND z.type = 'STOCKAGE' AND a.entreprise_id = $1`,
+    [entrepriseId],
   );
   // UM du client : une UM compte pour son empreinte, quel que soit son contenu (RG-M2-02)
   const ums = companyWide
@@ -84,13 +88,13 @@ async function liveSurface(tx: Tx, user: AuthUser) {
            FROM unite_manutention u JOIN emplacement em ON em.id = u.emplacement_courant_id JOIN zone z ON z.id = em.zone_id
           WHERE u.entreprise_id = $1 AND u.actif AND z.type = 'STOCKAGE'
             AND EXISTS (SELECT 1 FROM article a WHERE a.um_courante_id = u.id AND a.statut IN ${PRESENT})`,
-        [user.entrepriseId],
+        [entrepriseId],
       )
     : { rows: [] as LocRow[] };
   const dedicated = companyWide
-    ? (await tx.query<{ id: string; surface_m2: number }>(`SELECT id, surface_m2 FROM emplacement WHERE dedie_entreprise_id = $1 AND statut = 'ACTIF'`, [user.entrepriseId])).rows
+    ? (await tx.query<{ id: string; surface_m2: number }>(`SELECT id, surface_m2 FROM emplacement WHERE dedie_entreprise_id = $1 AND statut = 'ACTIF'`, [entrepriseId])).rows
     : [];
-  const nbArticles = (await tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM article WHERE statut IN ${PRESENT}`)).rows[0]!.n;
+  const nbArticles = (await tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM article WHERE statut IN ${PRESENT} AND entreprise_id = $1`, [entrepriseId])).rows[0]!.n;
 
   const toItem = (r: LocRow): SurfaceItem => ({
     lengthM: r.longueur_m ?? 0,
@@ -107,7 +111,7 @@ async function liveSurface(tx: Tx, user: AuthUser) {
   });
 
   // Ventilation par projet (INV-04), articles libres seulement : une UM ou un box ne sont pas rattachés à un projet
-  const projets = await tx.query<{ id: string; nom: string }>(`SELECT id, nom FROM projet ORDER BY nom`);
+  const projets = await tx.query<{ id: string; nom: string }>(`SELECT id, nom FROM projet WHERE entreprise_id = $1 ORDER BY nom`, [entrepriseId]);
   const parProjet = projets.rows
     .map((p) => {
       const rows = articles.rows.filter((r) => r.projet_id === p.id);

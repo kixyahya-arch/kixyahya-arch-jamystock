@@ -3,11 +3,12 @@ import path from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 
 /**
- * Sert les builds des applis web depuis l'API : l'Espace Client à la racine, l'app terrain sous /terrain/.
+ * Sert les builds des applis web depuis l'API : l'Espace Client à la racine, l'app terrain sous /terrain/,
+ * le Back-Office sous /admin/.
  * Une seule adresse, donc ni CORS ni configuration de proxy chez l'hébergeur.
  * Les fichiers versionnés (/assets/*-hash.js) sont mis en cache longtemps ; les pages, jamais.
  */
-export function serveFrontends(app: INestApplication, dirs: { client?: string; terrain?: string }) {
+export function serveFrontends(app: INestApplication, dirs: { client?: string; terrain?: string; admin?: string }) {
   const headers = (res: Response, file: string) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
@@ -29,8 +30,14 @@ export function serveFrontends(app: INestApplication, dirs: { client?: string; t
     app.use('/terrain', express.static(path.resolve(dirs.terrain), { index: 'index.html', setHeaders: headers }));
     app.use(spa(dirs.terrain, '/terrain'));
   }
+  if (dirs.admin) {
+    app.use('/admin', express.static(path.resolve(dirs.admin), { index: 'index.html', setHeaders: headers }));
+    app.use(spa(dirs.admin, '/admin'));
+  }
   if (dirs.client) {
     app.use(express.static(path.resolve(dirs.client), { index: 'index.html', setHeaders: headers }));
-    app.use((req: Request, res: Response, next: NextFunction) => (req.path.startsWith('/terrain') ? next() : spa(dirs.client!, '/')(req, res, next)));
+    app.use((req: Request, res: Response, next: NextFunction) =>
+      req.path.startsWith('/terrain') || req.path.startsWith('/admin') ? next() : spa(dirs.client!, '/')(req, res, next),
+    );
   }
 }

@@ -12,6 +12,8 @@ import { FilesService } from '../files/files.service.js';
 const ListQuery = z.object({
   projet: z.string().uuid().optional(),
   depot: z.string().uuid().optional(),
+  /** Back-Office : filtre par client (le personnel voit tout le tenant) */
+  client: z.string().uuid().optional(),
   categorie: z.string().uuid().optional(),
   etat: z.enum(ARTICLE_CONDITIONS).optional(),
   statut: z.enum(ARTICLE_STATUSES).optional(),
@@ -45,6 +47,7 @@ export class InventoryController {
       where.push(sql.replace('?', `$${params.length}`));
     };
     if (q.projet) add('a.projet_id = ?', q.projet);
+    if (q.client) add('a.entreprise_id = ?', q.client);
     if (q.categorie) add('a.categorie_id = ?', q.categorie);
     if (q.etat) add('a.etat = ?', q.etat);
     if (q.statut) add('a.statut = ?', q.statut);
@@ -64,7 +67,8 @@ export class InventoryController {
     const from = `FROM article a
       LEFT JOIN emplacement e ON e.id = a.emplacement_courant_id
       LEFT JOIN zone z ON z.id = e.zone_id
-      LEFT JOIN categorie c ON c.id = a.categorie_id`;
+      LEFT JOIN categorie c ON c.id = a.categorie_id
+      LEFT JOIN entreprise ent ON ent.id = a.entreprise_id`;
 
     return this.db.tx(ctxOf(user), async (tx) => {
       const count = await tx.query<{ n: number }>(`SELECT count(*)::int AS n ${from} ${baseWhere}`, params);
@@ -77,7 +81,7 @@ export class InventoryController {
       pageParams.push(q.limite);
       const rows = await tx.query(
         `SELECT a.id, a.qr_code AS "qrCode", a.libelle, a.nom_client AS "nomClient", a.statut, a.etat,
-                a.projet_id AS "projetId", c.nom AS categorie, e.chemin AS localisation, a.date_entree AS "dateEntree",
+                a.projet_id AS "projetId", ent.nom AS client, c.nom AS categorie, e.chemin AS localisation, a.date_entree AS "dateEntree",
                 (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS "photoId",
                 EXISTS (SELECT 1 FROM ligne_commande lc WHERE lc.article_id = a.id AND lc.active) AS "engage"
            ${from} ${pageWhere}
