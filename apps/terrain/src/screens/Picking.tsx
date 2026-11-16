@@ -108,9 +108,7 @@ export function Picking({ missionId, onBack }: { missionId: string; onBack: () =
       <ul className="list picklist">
         {shown.map((l) => (
           <li key={l.id} className="pick">
-            <span className="thumb" aria-hidden="true">
-              {(l.libelle ?? '?').slice(0, 1).toUpperCase()}
-            </span>
+            <Thumb src={l.vignette} label={l.libelle} />
             <span className="row-main">
               <strong>{l.libelle}</strong>
               <small>{l.chemin ? l.chemin.split(' > ').slice(1).join(' › ') || l.chemin : 'Emplacement inconnu'}</small>
@@ -158,5 +156,15 @@ function MissingForm({ line, onSubmit, onCancel }: { line: MissionLine; onSubmit
         Déclarer l’anomalie
       </button>
     </Screen>
+  );
+}
+
+/** Vignette signée par l'API ; hors réseau ou en cas d'erreur, l'initiale de l'article. */
+function Thumb({ src, label }: { src: string | null; label: string | null }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="thumb" aria-hidden="true">
+      {src && !failed ? <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} /> : (label ?? '?').slice(0, 1).toUpperCase()}
+    </span>
   );
 }

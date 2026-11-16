@@ -31,6 +31,7 @@ import { ctxOf } from '../common/context.js';
 import { BusinessError, conflict, forbidden, notFound, unprocessable } from '../common/errors.js';
 import { OrdersService, type OrderRow } from '../orders/orders.service.js';
 import { AuditService } from '../audit/audit.service.js';
+import { FilesService } from '../files/files.service.js';
 
 /** Contexte d'exécution d'une action terrain. */
 interface ActionCtx {
@@ -120,6 +121,7 @@ export class FieldService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(OrdersService) private readonly orders: OrdersService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(FilesService) private readonly files: FilesService,
   ) {}
 
   // =====================================================================================
@@ -409,10 +411,10 @@ export class FieldService {
       const order = mission.commande_id ? (await tx.query('SELECT * FROM commande WHERE id = $1', [mission.commande_id])).rows[0] : null;
       const lignes = mission.commande_id
         ? (
-            await tx.query<{ chemin: string | null }>(
+            await tx.query<{ chemin: string | null; vignette: string | null }>(
               `SELECT l.id, l.article_id AS "articleId", l.statut_ligne AS "statutLigne", l.description_libre AS "descriptionLibre",
                       a.qr_code AS "qrCode", a.libelle, a.statut, e.chemin, e.code AS "emplacementCode",
-                      (SELECT p.cle_vignette FROM photo p WHERE p.article_id = a.id ORDER BY p.prise_le LIMIT 1) AS vignette
+                      (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS vignette
                  FROM ligne_commande l
                  LEFT JOIN article a ON a.id = l.article_id
                  LEFT JOIN emplacement e ON e.id = a.emplacement_courant_id
@@ -436,7 +438,7 @@ export class FieldService {
           dateConfirmee: order.date_confirmee,
           creneau: order.creneau_confirme,
         },
-        lignes: sortByPath(lignes),
+        lignes: sortByPath(lignes).map((l) => ({ ...l, vignette: l.vignette ? this.files.photoUrl(user.tenantId, l.vignette, 't') : null })),
       };
     });
   }
