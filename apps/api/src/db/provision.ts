@@ -3,7 +3,8 @@ import path from 'node:path';
 import pg from 'pg';
 import { migrate } from './migrate.js';
 import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
-import { seed } from './seed.js';
+import { DEMO_PASSWORD, seed } from './seed.js';
+import { hashPassword } from '../auth/auth.service.js';
 
 /**
  * Préparation d'une base hébergée, lancée avant chaque déploiement avec l'URL propriétaire (DATABASE_URL) :
@@ -11,7 +12,8 @@ import { seed } from './seed.js';
  *  2. rôles jamystock_app (groupe soumis à la RLS) et jamystock_api (connexion de l'API, mot de passe APP_DB_PASSWORD) ;
  *  3. migrations ;
  *  4. données de démonstration si SEED_DEMO=true et la base est vide ; sinon, réécriture des photos de démonstration
- *     absentes du disque (un hébergeur sans disque persistant efface les fichiers à chaque redémarrage).
+ *     absentes du disque (un hébergeur sans disque persistant efface les fichiers à chaque redémarrage)
+ *     et remise du mot de passe des comptes de démo (*.test) à DEMO_PASSWORD, qui peut changer après la seed.
  * Idempotent : se relance sans effet de bord.
  */
 export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: string) => void = console.log) {
@@ -52,7 +54,28 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
       log('Données déjà présentes : pas de seed');
       const restored = await restoreDemoPhotos(url, env.STORAGE_DIR ?? '.storage');
       if (restored) log(`${restored} photo(s) de démonstration réécrite(s)`);
+      log(`Mot de passe des comptes de démonstration appliqué (${await syncDemoPassword(url)} compte(s))`);
     }
+  }
+}
+
+/** Aligne le mot de passe des comptes de démonstration (emails en .test) sur DEMO_PASSWORD. */
+async function syncDemoPassword(url: string): Promise<number> {
+  const hash = await hashPassword(DEMO_PASSWORD);
+  const c = new pg.Client({ connectionString: url });
+  await c.connect();
+  try {
+    let n = 0;
+    for (const org of (await c.query<{ id: string }>('SELECT id FROM organisation')).rows) {
+      await c.query('BEGIN');
+      await c.query(`SELECT set_config('app.tenant_id', $1, true), set_config('app.role', 'SYSTEM', true)`, [org.id]);
+      const r = await c.query(`UPDATE utilisateur SET mot_de_passe_hash = $1 WHERE email LIKE '%.test'`, [hash]);
+      await c.query('COMMIT');
+      n += r.rowCount ?? 0;
+    }
+    return n;
+  } finally {
+    await c.end();
   }
 }
 
