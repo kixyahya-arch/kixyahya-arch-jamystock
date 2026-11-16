@@ -497,19 +497,21 @@ export class OrdersService {
     const existing = await tx.query(`SELECT 1 FROM mission WHERE commande_id = $1 AND statut <> 'ANNULEE'`, [order.id]);
     if (existing.rowCount) return; // replanification après échec : missions conservées
     const day = order.date_confirmee!;
-    const insert = (type: string, debut: string) =>
+    // heures locales du dépôt (Paris), quel que soit le décalage été / hiver
+    const insert = (type: string, date: string, heure: string) =>
       tx.query(
-        `INSERT INTO mission (id, tenant_id, commande_id, depot_id, type, debut_prevu) VALUES ($1, $2, $3, $4, $5, $6::timestamptz)`,
-        [uuidv7(), user.tenantId, order.id, order.depot_id, type, debut],
+        `INSERT INTO mission (id, tenant_id, commande_id, depot_id, type, debut_prevu)
+         VALUES ($1, $2, $3, $4, $5, ($6::date + $7::time) AT TIME ZONE 'Europe/Paris')`,
+        [uuidv7(), user.tenantId, order.id, order.depot_id, type, date, heure],
       );
     if (order.type === 'COLLECTE') {
-      await insert('COLLECTE', `${day}T08:00:00Z`);
+      await insert('COLLECTE', day, '08:00');
       return;
     }
     const veille = new Date(`${day}T00:00:00Z`);
     veille.setUTCDate(veille.getUTCDate() - 1);
-    await insert('PREPARATION', `${veille.toISOString().slice(0, 10)}T14:00:00Z`);
-    await insert(order.type === 'RETRAIT' ? 'RETRAIT' : 'LIVRAISON', `${day}T08:00:00Z`);
+    await insert('PREPARATION', veille.toISOString().slice(0, 10), '14:00');
+    await insert(order.type === 'RETRAIT' ? 'RETRAIT' : 'LIVRAISON', day, '08:00');
   }
 
   /** Notifications (§6.3) : mises en file ; l'envoi effectif est fait par le worker (phase D). */

@@ -228,7 +228,9 @@ export async function seed(databaseUrl: string): Promise<SeedResult> {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL manquant');
-  seed(url).then((r) => {
+  seed(url).then(async (r) => {
+    const { seedDemoOrders } = await import('./demo-orders.js');
+    console.log(`${await seedDemoOrders(url)} demande(s) de démonstration créée(s)`);
     console.log(`Organisation de démo : ${r.tenantId} (à mettre dans TENANT_ID)`);
     console.log(`Comptes (mot de passe « ${r.password} ») :`);
     for (const [k, u] of Object.entries(r.users)) console.log(`  ${k.padEnd(16)} ${u.email}`);

@@ -12,3 +12,4 @@ export * from './permissions.js';
 export * from './scheduling.js';
 export * from './alerts.js';
 export * from './sync.js';
+export * from './company.js';

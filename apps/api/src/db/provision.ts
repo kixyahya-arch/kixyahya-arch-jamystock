@@ -4,6 +4,7 @@ import pg from 'pg';
 import { migrate } from './migrate.js';
 import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
 import { DEMO_PASSWORD, seed } from './seed.js';
+import { seedDemoOrders } from './demo-orders.js';
 import { hashPassword } from '../auth/auth.service.js';
 
 /**
@@ -56,6 +57,8 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
       if (restored) log(`${restored} photo(s) de démonstration réécrite(s)`);
       log(`Mot de passe des comptes de démonstration appliqué (${await syncDemoPassword(url)} compte(s))`);
     }
+    const demo = await seedDemoOrders(url);
+    if (demo) log(`${demo} demande(s) de démonstration créée(s) pour le Back-Office`);
   }
 }
 

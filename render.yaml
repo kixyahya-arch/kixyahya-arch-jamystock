@@ -1,5 +1,5 @@
 # Démo en ligne JAMYSTOCK sur Render (Blueprint) : Dashboard Render > New > Blueprint > ce dépôt.
-# Un seul service web sert l'API, l'Espace Client (/) et l'app terrain (/terrain/).
+# Un seul service web sert l'API, l'Espace Client (/), l'app terrain (/terrain/) et le Back-Office (/admin/).
 # Au démarrage, provision.js prépare la base (rôles, schéma, données de démo) ; il se relance sans effet de bord.
 databases:
   - name: jamystock-db
@@ -41,6 +41,8 @@ services:
         value: apps/client/dist
       - key: TERRAIN_DIST
         value: apps/terrain/dist
+      - key: ADMIN_DIST
+        value: apps/admin/dist
       # Sans disque persistant (offre gratuite), les photos prises sur le terrain sont perdues au redémarrage ;
       # les illustrations de démonstration sont réécrites à chaque démarrage.
       - key: STORAGE_DIR
