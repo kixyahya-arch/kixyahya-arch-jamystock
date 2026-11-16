@@ -10,6 +10,8 @@ export interface AppConfig {
   storageDir: string;
   /** Builds des applis web à servir par l'API (mise en ligne sur une seule adresse) */
   frontends: { client?: string; terrain?: string; admin?: string };
+  /** Tâches de facturation planifiées (instantanés, brouillons, émission) : actives en production, ou BILLING_SCHEDULER=on */
+  billingScheduler: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -26,5 +28,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     defaultTenantId: env.TENANT_ID ?? null,
     storageDir: env.STORAGE_DIR ?? '.storage',
     frontends: { client: env.CLIENT_DIST || undefined, terrain: env.TERRAIN_DIST || undefined, admin: env.ADMIN_DIST || undefined },
+    billingScheduler: env.BILLING_SCHEDULER ? env.BILLING_SCHEDULER === 'on' : env.NODE_ENV === 'production' || env.RENDER === 'true',
   };
 }

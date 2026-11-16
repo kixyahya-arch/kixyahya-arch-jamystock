@@ -175,8 +175,13 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
   contre-proposition de date (FLX-02), planning par ressource avec glisser-déposer et contrôle de capacité (FLX-03),
   comptes clients avec SIRET contrôlé, projets et forfait (CLI-01), stock global. Avec `SEED_DEMO=true`, cinq demandes
   de démonstration sont créées par le vrai parcours.
-  Reste au Back-Office : dépôts et emplacements (WMS-01 à 03), corrections de stock (WMS-06), facturation (FAC).
-- **C. Facturation** : instantané m² quotidien, factures mensuelles et avoirs, Stripe.
+  Reste au Back-Office : dépôts et emplacements (WMS-01 à 03), corrections de stock (WMS-06).
+- **C. Facturation** (faite, hors Stripe) : instantané m² quotidien à 23 h 59 avec rattrapage et correction motivée (FAC-01),
+  brouillons le 1er à 2 h puis émission automatique à J+2 sauf blocage, numérotation continue et PDF figé avec empreinte
+  (FAC-02), avoirs partiels ou totaux et paiements (FAC-03), grilles versionnées et avenants (FAC-04), « Mes documents »
+  côté client avec téléchargement ZIP (SUI-03). Les tâches tournent dans l'API (`BILLING_SCHEDULER`, actif par défaut en
+  production) ; un service qui dort les rattrape au réveil, et le bouton « Lancer les tâches » les force. Avec
+  `SEED_DEMO=true`, deux mois de factures de démonstration sont produits par le vrai moteur. Paiement Stripe : plus tard.
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.
 

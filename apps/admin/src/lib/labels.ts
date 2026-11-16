@@ -93,3 +93,39 @@ export function addDays(iso: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+export const INVOICE_STATUS: Record<string, string> = {
+  BROUILLON: 'Brouillon',
+  EMISE: 'Émise',
+  PAYEE: 'Payée',
+  EN_RETARD: 'En retard',
+  ANNULEE: 'Annulée par avoir',
+};
+export const LINE_TYPE: Record<string, string> = { ABONNEMENT: 'Forfait', DEPASSEMENT_M2: 'Dépassement', PRESTATION: 'Prestation' };
+export const SNAPSHOT_SOURCE: Record<string, string> = { AUTO: 'Calcul de 23 h 59', RATTRAPAGE: 'Rattrapage', CORRECTION: 'Correction manuelle' };
+export const AUDIT_ACTION: Record<string, string> = {
+  BROUILLONS_GENERES: 'Brouillon généré',
+  LIGNE_AJOUTEE: 'Ligne ajoutée',
+  LIGNE_RETIREE: 'Ligne retirée',
+  FACTURE_BLOQUEE: 'Bloquée',
+  FACTURE_DEBLOQUEE: 'Débloquée',
+  FACTURE_EMISE: 'Émise',
+  AVOIR_EMIS: 'Avoir émis',
+  AVOIR_CREE: 'Avoir créé',
+  FACTURE_PAYEE: 'Paiement reçu',
+};
+
+/** « 1 800,50 » ou « 1800.5 » → centimes ; null si illisible. */
+export function parseEuros(v: string): number | null {
+  const s = v.replace(/[\s\u202f\u00a0€]/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d{1,2})?$/.test(s)) return null;
+  return Math.round(Number(s) * 100);
+}
+export const m2 = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} m²`);
+export const monthFr = (month: string) => new Date(`${month}-15T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+/** Mois précédant une date AAAA-MM-JJ. */
+export function previousMonth(iso: string): string {
+  const d = new Date(`${iso.slice(0, 7)}-01T12:00:00Z`);
+  d.setUTCDate(0);
+  return d.toISOString().slice(0, 7);
+}

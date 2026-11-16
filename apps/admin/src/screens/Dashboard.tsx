@@ -3,7 +3,7 @@ import { get } from '../lib/api';
 import { href } from '../lib/router';
 import type { BoContext, OrderRow, Summary } from '../lib/types';
 import { ORDER_STATUS, ORDER_TYPE, dateShort } from '../lib/labels';
-import { Banner, Pills, StatusPill, Urgent, orderTone } from '../components/ui';
+import { Banner, Pills, StatusPill, Tile, Urgent, orderTone } from '../components/ui';
 
 /** FLX-01 : colonnes du Kanban, de ce qui attend le dépôt à ce qui est terminé. */
 const COLUMNS: { key: string; label: string; statuts: string[] }[] = [
@@ -175,19 +175,6 @@ export function Dashboard({ ctx }: { ctx: BoContext }) {
       )}
     </>
   );
-}
-
-function Tile({ n, label, href: link, accent, alert, onClick }: { n: number; label: string; href?: string; accent?: boolean; alert?: boolean; onClick?: () => void }) {
-  const cls = `tile${accent ? ' accent' : ''}${alert ? ' alert' : ''}`;
-  const body = (
-    <>
-      <strong>{n}</strong>
-      <span>{label}</span>
-    </>
-  );
-  if (link) return <a className={cls} href={link}>{body}</a>;
-  if (onClick) return <button type="button" className={cls} onClick={onClick}>{body}</button>;
-  return <div className={cls}>{body}</div>;
 }
 
 const when = (o: OrderRow) => {

@@ -134,3 +134,26 @@ export function deviceId(): string {
 export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body: JSON.stringify(body) });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
+
+/** Fichier binaire (PDF, ZIP) avec la session : à ouvrir via URL.createObjectURL. */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  let res = await raw(path, init, current?.accessToken);
+  if (res.status === 401 && (await refresh())) res = await raw(path, init, current?.accessToken);
+  if (!res.ok) await parse(res);
+  return res.blob();
+}
+
+/** Ouvre un PDF protégé dans un nouvel onglet (ou le télécharge si le navigateur bloque l'onglet). */
+export async function openPdf(path: string, name: string): Promise<void> {
+  const tab = window.open('', '_blank');
+  const url = URL.createObjectURL(await apiBlob(path));
+  if (tab) tab.location.href = url;
+  else {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+export const put = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'PUT', body: JSON.stringify(body) });

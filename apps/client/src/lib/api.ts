@@ -129,3 +129,23 @@ export function deviceId(): string {
 export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body: JSON.stringify(body) });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
+
+/** Fichier binaire (PDF, ZIP) avec la session. */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  let res = await raw(path, init, current?.accessToken);
+  if (res.status === 401 && (await refresh())) res = await raw(path, init, current?.accessToken);
+  if (!res.ok) await parse(res);
+  return res.blob();
+}
+
+/** Enregistre un fichier sur l'appareil (lien de téléchargement temporaire). */
+export function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

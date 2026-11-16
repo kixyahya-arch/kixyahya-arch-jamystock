@@ -9,6 +9,10 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'planning' }, label: 'Planning', active: route.name === 'planning' },
     { r: { name: 'clients' }, label: 'Clients', active: route.name === 'clients' || route.name === 'client' || route.name === 'nouveau-client' },
     { r: { name: 'stock' }, label: 'Stock', active: route.name === 'stock' },
+    // tarifs et montants : Super Admin seulement (le Dispatcher n'y a pas accès, §2.2)
+    ...(session.user?.role === 'SUPER_ADMIN'
+      ? [{ r: { name: 'facturation' } as Route, label: 'Facturation', active: ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) }]
+      : []),
   ];
   return (
     <div className="app bo">
@@ -77,4 +81,17 @@ export function orderTone(statut: string): 'neutral' | 'lime' | 'dark' | 'alert'
   if (['REFUSEE', 'ANNULEE', 'ECHEC_LIVRAISON', 'LIVREE_AVEC_RESERVES'].includes(statut)) return 'alert';
   if (['PLANIFIEE', 'EN_PREPARATION', 'PRETE', 'EN_LIVRAISON'].includes(statut)) return 'dark';
   return 'neutral';
+}
+
+export function Tile({ n, label, href: link, accent, alert, onClick }: { n: number | string; label: string; href?: string; accent?: boolean; alert?: boolean; onClick?: () => void }) {
+  const cls = `tile${accent ? ' accent' : ''}${alert ? ' alert' : ''}`;
+  const body = (
+    <>
+      <strong>{n}</strong>
+      <span>{label}</span>
+    </>
+  );
+  if (link) return <a className={cls} href={link}>{body}</a>;
+  if (onClick) return <button type="button" className={cls} onClick={onClick}>{body}</button>;
+  return <div className={cls}>{body}</div>;
 }

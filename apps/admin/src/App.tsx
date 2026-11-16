@@ -8,6 +8,8 @@ import { OrderView } from './screens/OrderView';
 import { PlanningView } from './screens/Planning';
 import { ClientView, Clients, NewClient } from './screens/Clients';
 import { Stock } from './screens/Stock';
+import { InvoiceView, Invoices } from './screens/Billing';
+import { Pricing, Surfaces } from './screens/Pricing';
 import { Banner, Shell } from './components/ui';
 
 /** Le Back-Office est réservé à l'encadrement du dépôt ; opérateurs et chauffeurs utilisent l'app terrain. */
@@ -63,6 +65,16 @@ export function App() {
         isAdmin ? <NewClient /> : <Banner kind="info">Seul le Super Admin ouvre des comptes clients.</Banner>
       ) : route.name === 'stock' ? (
         <Stock ctx={ctx} />
+      ) : ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) && !isAdmin ? (
+        <Banner kind="info">La facturation et les tarifs sont réservés au Super Admin.</Banner>
+      ) : route.name === 'facturation' ? (
+        <Invoices ctx={ctx} />
+      ) : route.name === 'facture' ? (
+        <InvoiceView id={route.id} />
+      ) : route.name === 'tarifs' ? (
+        <Pricing ctx={ctx} />
+      ) : route.name === 'surfaces' ? (
+        <Surfaces ctx={ctx} client={route.client} />
       ) : (
         <Dashboard ctx={ctx} />
       )}

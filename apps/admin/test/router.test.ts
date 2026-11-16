@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { href, parse } from '../src/lib/router';
-import { addDays, roleFor } from '../src/lib/labels';
+import { addDays, parseEuros, previousMonth, roleFor } from '../src/lib/labels';
 
 describe('routes du Back-Office', () => {
   it('aller-retour entre ancre et route', () => {
@@ -13,6 +13,11 @@ describe('routes du Back-Office', () => {
       { name: 'client', id: 'c1' },
       { name: 'nouveau-client' },
       { name: 'stock' },
+      { name: 'facturation' },
+      { name: 'facture', id: 'f1' },
+      { name: 'tarifs' },
+      { name: 'surfaces' },
+      { name: 'surfaces', client: 'c1' },
     ] as const) {
       expect(parse(href(r))).toEqual(r);
     }
@@ -32,5 +37,19 @@ describe('planning', () => {
   it('change de jour sans décalage de fuseau, y compris en fin de mois', () => {
     expect(addDays('2026-11-30', 1)).toBe('2026-12-01');
     expect(addDays('2026-03-29', -1)).toBe('2026-03-28');
+  });
+});
+
+describe('saisie des montants', () => {
+  it('accepte la virgule, les espaces et le symbole euro', () => {
+    expect(parseEuros('1 800,50 €')).toBe(180050);
+    expect(parseEuros('17')).toBe(1700);
+    expect(parseEuros('12.5')).toBe(1250);
+    expect(parseEuros('douze')).toBeNull();
+    expect(parseEuros('1,234')).toBeNull();
+  });
+  it('mois précédent, y compris en janvier', () => {
+    expect(previousMonth('2026-11-16')).toBe('2026-10');
+    expect(previousMonth('2027-01-01')).toBe('2026-12');
   });
 });

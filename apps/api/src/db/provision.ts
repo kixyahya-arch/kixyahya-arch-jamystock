@@ -5,6 +5,7 @@ import { migrate } from './migrate.js';
 import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
 import { DEMO_PASSWORD, seed } from './seed.js';
 import { seedDemoOrders } from './demo-orders.js';
+import { seedDemoBilling } from './demo-billing.js';
 import { hashPassword } from '../auth/auth.service.js';
 
 /**
@@ -59,6 +60,8 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
     }
     const demo = await seedDemoOrders(url);
     if (demo) log(`${demo} demande(s) de démonstration créée(s) pour le Back-Office`);
+    const factures = await seedDemoBilling(url, env.STORAGE_DIR ?? '.storage');
+    if (factures) log(`${factures} facture(s) de démonstration créée(s)`);
   }
 }
 
