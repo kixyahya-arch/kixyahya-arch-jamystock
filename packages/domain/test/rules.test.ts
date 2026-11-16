@@ -163,3 +163,21 @@ describe('alertes forfait (§6.2)', () => {
     expect(evaluateAlerts({ includedM2: 100, history: Array(60).fill(50), lastSentAt: {}, today: '2026-11-16' })).toEqual(['RG-AL-04']);
   });
 });
+
+describe('contrat de synchronisation terrain', () => {
+  it('empreinte de BL stable quel que soit l’ordre de saisie', async () => {
+    const { blFingerprint, sortByPath } = await import('../src/sync.js');
+    const base = {
+      blId: 'b', missionId: 'm', signatureSvg: '<svg/>', signedAt: '2027-01-18T09:00:00Z',
+      signataire: { nom: 'A', qualite: 'Chef de chantier' },
+    };
+    const a = blFingerprint({ ...base, livres: ['x', 'y'], refuses: [], reserves: [{ articleId: 'y', type: 'RAYURE', photoIds: ['p2', 'p1'] }] });
+    const b = blFingerprint({ ...base, livres: ['y', 'x'], refuses: [], reserves: [{ articleId: 'y', type: 'RAYURE', commentaire: '', photoIds: ['p1', 'p2'] }] });
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(blFingerprint({ ...base, livres: ['x'], refuses: ['y'], reserves: [] })).not.toBe(a);
+    expect(sortByPath([{ chemin: 'N > B > Allée 10' }, { chemin: null }, { chemin: 'N > B > Allée 4' }]).map((x) => x.chemin)).toEqual([
+      'N > B > Allée 4', 'N > B > Allée 10', null,
+    ]);
+  });
+});
