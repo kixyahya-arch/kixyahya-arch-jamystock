@@ -1,4 +1,15 @@
-import { randomBytes, createHash } from 'node:crypto';
+/** Aléa portable (Node ≥ 19 et navigateurs) : l'app terrain génère ses identifiants hors-ligne. */
+function randomBytes(n: number): Uint8Array {
+  const b = new Uint8Array(n);
+  globalThis.crypto.getRandomValues(b);
+  return b;
+}
+
+function toHex(b: Uint8Array): string {
+  let s = '';
+  for (const x of b) s += x.toString(16).padStart(2, '0');
+  return s;
+}
 
 /**
  * UUID v7 (RFC 9562) : triable dans le temps et générable hors-ligne (§5).
@@ -15,7 +26,7 @@ export function uuidv7(now: number = Date.now()): string {
   bytes[5] = Number(ts & 0xffn);
   bytes[6] = (bytes[6]! & 0x0f) | 0x70; // version 7
   bytes[8] = (bytes[8]! & 0x3f) | 0x80; // variante RFC
-  const hex = bytes.toString('hex');
+  const hex = toHex(bytes);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
@@ -62,20 +73,3 @@ export function parseQr(input: string): { type: QrType; qr: string } | null {
   return { type: m[1] as QrType, qr: raw };
 }
 
-/** Empreinte SHA-256 d'un objet sérialisé de façon canonique (clés triées), pour les BL (§4.3). */
-export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
-}
-
-export function sha256Hex(data: string | Buffer): string {
-  return createHash('sha256').update(data).digest('hex');
-}
-
-export function fingerprint(value: unknown): string {
-  return sha256Hex(canonicalJson(value));
-}

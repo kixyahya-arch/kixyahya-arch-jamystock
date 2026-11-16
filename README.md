@@ -17,9 +17,11 @@ packages/domain   Règles métier pures, sans I/O : machine à états des comman
 apps/api          API NestJS (REST) sur PostgreSQL 16 : authentification, RBAC à portée, RLS, audit,
                   inventaire, panier et commandes.
 apps/api/migrations  Schéma SQL complet du MCD (§5) et politiques Row-Level Security.
+apps/terrain      PWA hors-ligne (Vite + React) : réception, déplacement, préparation, chargement,
+                  livraison signée, collecte. Base locale IndexedDB et file d'envoi ordonnée.
 ```
 
-À venir : `apps/web` (Next.js : Espace Client + Back-Office), `apps/terrain` (PWA hors-ligne), workers BullMQ.
+À venir : `apps/web` (Next.js : Espace Client + Back-Office), workers BullMQ.
 
 ### Principes clés
 
@@ -47,7 +49,11 @@ pnpm db:migrate
 pnpm db:seed                            # affiche le TENANT_ID à reporter dans .env
 pnpm --filter @jamystock/domain build
 pnpm dev:api                            # http://localhost:3000
+pnpm --filter @jamystock/terrain dev    # app terrain sur http://localhost:5173 (relaie /api vers :3000)
 ```
+
+Sur téléphone, la caméra exige HTTPS (ou `localhost`) : passer par un tunnel HTTPS ou utiliser la saisie
+manuelle / douchette, toujours disponible sous le bouton « Scanner ».
 
 Comptes de démonstration (mot de passe `demo-jamystock`) : `admin@jamystock.test` (Super Admin),
 `dispatch@jamystock.test`, `operateur@jamystock.test`, `chauffeur@jamystock.test`, `dsg@horizon.test` (B2B Admin),
@@ -58,6 +64,7 @@ Comptes de démonstration (mot de passe `demo-jamystock`) : `admin@jamystock.tes
 
 ```bash
 pnpm test        # domaine (unitaires) + API (bout en bout sur jamystock_test, base réinitialisée à chaque fichier)
+                 # + app terrain (file d'envoi sur IndexedDB simulée, empreinte BL identique terminal/serveur)
 pnpm typecheck
 ```
 
@@ -109,11 +116,24 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `PICKUP_SIGN` (BL d'enlèvement, articles ATTENDU) | Chauffeur | LIV-06 |
 | `RETURN` (article refusé de retour au dépôt) | Opérateur | §4.3 |
 
+### App terrain (PWA)
+
+- **D'abord en local** : chaque geste est écrit dans IndexedDB puis envoyé dès que le réseau revient
+  (retour en ligne, retour au premier plan, toutes les 30 s). Une pastille en haut de chaque écran indique
+  ce qui reste à envoyer ; la déconnexion est bloquée tant que la file n'est pas vide.
+- **Ordre et idempotence** : actions envoyées par lots de 50 dans l'ordre des gestes, avec une clé par action.
+  Une action refusée par le serveur est mise de côté et signalée ; une action mal formée est isolée sans bloquer la file.
+- **Photos** compressées sur le terminal (WebP, 2048 px) et téléversées après les données, BL et réserves d'abord.
+- **Scan** : caméra (BarcodeDetector, sinon jsQR), douchette ou saisie ; un scan hors commande bloque avec alerte.
+- **Signature** au doigt convertie en SVG ; l'empreinte SHA-256 du BL est calculée sur le terminal et revérifiée par l'API.
+- **Coque en cache** (service worker) : l'appli s'ouvre sans réseau une fois chargée ; les données hors-ligne
+  sont les missions pré-chargées à l'ouverture de l'accueil.
+
 ## Feuille de route
 
 - **A. Socle** (fait) : monorepo, domaine, schéma, auth, RBAC + RLS, audit, panier et commandes, CI.
-- **B. Tranche verticale** (API terrain faite) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
-  livraison avec signature du BL et empreinte SHA-256. Restent les écrans : PWA terrain, Espace Client (inventaire, panier, suivi) et Back-Office (dispatch).
+- **B. Tranche verticale** (API et PWA terrain faites) : réception terrain (photo + QR + emplacement, hors-ligne), préparation et chargement par scan,
+  livraison avec signature du BL et empreinte SHA-256. Restent : Espace Client (inventaire, panier, suivi) et Back-Office (dispatch).
 - **C. Facturation** : instantané m² quotidien, factures mensuelles et avoirs, Stripe.
 - **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
   documents, notifications email.
