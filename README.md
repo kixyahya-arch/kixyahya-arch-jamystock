@@ -175,7 +175,10 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
   contre-proposition de date (FLX-02), planning par ressource avec glisser-déposer et contrôle de capacité (FLX-03),
   comptes clients avec SIRET contrôlé, projets et forfait (CLI-01), stock global. Avec `SEED_DEMO=true`, cinq demandes
   de démonstration sont créées par le vrai parcours.
-  Reste au Back-Office : dépôts et emplacements (WMS-01 à 03), corrections de stock (WMS-06).
+  Dépôts (fait) : arbre dépôt > zones > allées > emplacements éditable (WMS-01), génération en masse par motif et
+  import CSV avec aperçu (WMS-02), étiquettes QR en planche A4 Avery ou ZPL Zebra 50 × 25 / 100 × 50 mm (WMS-03),
+  corrections de stock motivées et tracées : déplacer, perdu, retrouvé, endommagé, détruit, scinder ou fusionner
+  des palettes (WMS-06).
 - **C. Facturation** (faite, hors Stripe) : instantané m² quotidien à 23 h 59 avec rattrapage et correction motivée (FAC-01),
   brouillons le 1er à 2 h puis émission automatique à J+2 sauf blocage, numérotation continue et PDF figé avec empreinte
   (FAC-02), avoirs partiels ou totaux et paiements (FAC-03), grilles versionnées et avenants (FAC-04), « Mes documents »

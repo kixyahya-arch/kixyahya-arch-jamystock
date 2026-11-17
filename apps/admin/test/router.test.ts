@@ -53,3 +53,13 @@ describe('saisie des montants', () => {
     expect(previousMonth('2027-01-01')).toBe('2026-12');
   });
 });
+
+describe('routes des dépôts', () => {
+  it('dépôts, dépôt, fiche de correction d’un article', () => {
+    expect(parse('#/depots')).toEqual({ name: 'depots' });
+    expect(parse('#/depots/abc')).toEqual({ name: 'depot', id: 'abc' });
+    expect(parse('#/stock/xyz')).toEqual({ name: 'article', id: 'xyz' });
+    expect(href({ name: 'depot', id: 'abc' })).toBe('#/depots/abc');
+    expect(href({ name: 'article', id: 'xyz' })).toBe('#/stock/xyz');
+  });
+});

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { get } from '../lib/api';
 import type { BoContext, StockItem } from '../lib/types';
+import { go } from '../lib/router';
+import { DepotTabs } from './Warehouse';
 import { ARTICLE_STATUS, CONDITION, dateFr } from '../lib/labels';
 import { Banner, StatusPill, Thumb } from '../components/ui';
 
@@ -11,7 +13,7 @@ interface Page {
 }
 
 /** Stock de tout le dépôt, tous clients confondus, avec la même recherche que l'Espace Client (INV-03). */
-export function Stock({ ctx }: { ctx: BoContext }) {
+export function Stock({ ctx, canCorrect = false }: { ctx: BoContext; canCorrect?: boolean }) {
   const [client, setClient] = useState('');
   const [statut, setStatut] = useState('');
   const [q, setQ] = useState('');
@@ -46,8 +48,10 @@ export function Stock({ ctx }: { ctx: BoContext }) {
         <div>
           <p className="eyebrow">— Dépôt</p>
           <h1>Stock</h1>
+          {canCorrect && <p className="lead">Cliquez sur un bien pour le déplacer, le déclarer perdu ou endommagé, ou réimprimer son étiquette.</p>}
         </div>
       </section>
+      {canCorrect && <DepotTabs active="stock" />}
       <section className="toolbar">
         <input className="search" type="search" placeholder="Rechercher un bien : « bureau », « chaise »…" aria-label="Rechercher un bien" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Client" value={client} onChange={(e) => setClient(e.target.value)}>
@@ -95,7 +99,7 @@ export function Stock({ ctx }: { ctx: BoContext }) {
               </thead>
               <tbody>
                 {page.items.map((a) => (
-                  <tr key={a.id}>
+                  <tr key={a.id} className={canCorrect ? 'clickable' : undefined} onClick={canCorrect ? () => go({ name: 'article', id: a.id }) : undefined}>
                     <td className="thumb-cell">
                       <Thumb src={a.vignette} alt="" />
                     </td>

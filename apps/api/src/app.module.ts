@@ -22,6 +22,7 @@ import { FilesService } from './files/files.service.js';
 import { ClientController } from './client/client.controller.js';
 import { BackofficeController } from './backoffice/backoffice.controller.js';
 import { BillingController } from './billing/billing.controller.js';
+import { WarehouseController } from './warehouse/warehouse.controller.js';
 import { DocumentsController } from './billing/documents.controller.js';
 import { BillingService } from './billing/billing.service.js';
 import { BillingScheduler } from './billing/billing.scheduler.js';
@@ -32,7 +33,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },

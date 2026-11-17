@@ -9,6 +9,9 @@ export type Route =
   | { name: 'client'; id: string }
   | { name: 'nouveau-client' }
   | { name: 'stock' }
+  | { name: 'article'; id: string }
+  | { name: 'depots' }
+  | { name: 'depot'; id: string }
   | { name: 'facturation' }
   | { name: 'facture'; id: string }
   | { name: 'tarifs' }
@@ -21,7 +24,10 @@ export function parse(hash: string): Route {
   if (a === 'clients' && b === 'nouveau') return { name: 'nouveau-client' };
   if (a === 'clients' && b) return { name: 'client', id: b };
   if (a === 'clients') return { name: 'clients' };
+  if (a === 'stock' && b) return { name: 'article', id: b };
   if (a === 'stock') return { name: 'stock' };
+  if (a === 'depots' && b) return { name: 'depot', id: b };
+  if (a === 'depots') return { name: 'depots' };
   if (a === 'facturation' && b === 'tarifs') return { name: 'tarifs' };
   if (a === 'facturation' && b === 'surfaces') return { name: 'surfaces', client: hash.split('/')[3] || undefined };
   if (a === 'facturation' && b) return { name: 'facture', id: b };
@@ -41,6 +47,10 @@ export function href(r: Route): string {
       return '#/clients/nouveau';
     case 'demandes':
       return '#/';
+    case 'article':
+      return `#/stock/${r.id}`;
+    case 'depot':
+      return `#/depots/${r.id}`;
     case 'facture':
       return `#/facturation/${r.id}`;
     case 'tarifs':

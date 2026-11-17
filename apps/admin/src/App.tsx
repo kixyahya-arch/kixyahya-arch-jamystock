@@ -8,6 +8,8 @@ import { OrderView } from './screens/OrderView';
 import { PlanningView } from './screens/Planning';
 import { ClientView, Clients, NewClient } from './screens/Clients';
 import { Stock } from './screens/Stock';
+import { StockArticle } from './screens/StockArticle';
+import { DepotView, Depots } from './screens/Warehouse';
 import { InvoiceView, Invoices } from './screens/Billing';
 import { Pricing, Surfaces } from './screens/Pricing';
 import { Banner, Shell } from './components/ui';
@@ -64,7 +66,15 @@ export function App() {
       ) : route.name === 'nouveau-client' ? (
         isAdmin ? <NewClient /> : <Banner kind="info">Seul le Super Admin ouvre des comptes clients.</Banner>
       ) : route.name === 'stock' ? (
-        <Stock ctx={ctx} />
+        <Stock ctx={ctx} canCorrect={isAdmin} />
+      ) : ['depots', 'depot', 'article'].includes(route.name) && !isAdmin ? (
+        <Banner kind="info">Les dépôts, emplacements et corrections de stock sont réservés au Super Admin.</Banner>
+      ) : route.name === 'depots' ? (
+        <Depots />
+      ) : route.name === 'depot' ? (
+        <DepotView id={route.id} />
+      ) : route.name === 'article' ? (
+        <StockArticle id={route.id} />
       ) : ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) && !isAdmin ? (
         <Banner kind="info">La facturation et les tarifs sont réservés au Super Admin.</Banner>
       ) : route.name === 'facturation' ? (
