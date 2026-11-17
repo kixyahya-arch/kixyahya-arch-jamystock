@@ -149,6 +149,13 @@ describe('étiquettes (WMS-03)', () => {
     const art = await postBin(admin, '/bo/warehouse/labels', { kind: 'ARTICLE', ids: t.data.articles.tilleuls.slice(0, 2), format: 'ZEBRA_100x50' });
     expect(art.status).toBe(200);
     expect((await post(admin, '/bo/warehouse/labels', { kind: 'EMPLACEMENT', ids, format: 'L7160', sortie: 'ZPL' })).status).toBe(422);
+
+    // planche de QR vierges pour la réception
+    const blank = await post(admin, '/labels/blank', { type: 'A', count: 21, lot: 'LOT-TEST-1' });
+    expect(blank.body.codes).toHaveLength(21);
+    const sheet = await postBin(admin, '/bo/warehouse/labels', { kind: 'VIERGE', lot: 'LOT-TEST-1', format: 'L7160' });
+    expect(sheet.status).toBe(200);
+    expect(((sheet.body as Buffer).toString('latin1').match(/\/Type \/Page\b/g) ?? []).length).toBe(1);
   });
 });
 
