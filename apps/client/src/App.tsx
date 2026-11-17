@@ -9,6 +9,7 @@ import { ArticleView } from './screens/ArticleView';
 import { CartView } from './screens/CartView';
 import { OrderView, Orders } from './screens/Orders';
 import { Collection } from './screens/Collection';
+import { Documents } from './screens/Documents';
 import { Banner, Shell } from './components/ui';
 
 const CLIENT_ROLES = ['B2B_ADMIN', 'B2B_USER', 'B2C'];
@@ -63,6 +64,8 @@ export function App() {
         <OrderView id={route.id} role={role} />
       ) : route.name === 'collecte' ? (
         <Collection ctx={ctx} role={role} />
+      ) : route.name === 'documents' ? (
+        <Documents ctx={ctx} />
       ) : (
         <Inventory ctx={ctx} canOrder />
       )}

@@ -231,6 +231,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   seed(url).then(async (r) => {
     const { seedDemoOrders } = await import('./demo-orders.js');
     console.log(`${await seedDemoOrders(url)} demande(s) de démonstration créée(s)`);
+    const { seedDemoBilling } = await import('./demo-billing.js');
+    console.log(`${await seedDemoBilling(url)} facture(s) de démonstration créée(s)`);
     console.log(`Organisation de démo : ${r.tenantId} (à mettre dans TENANT_ID)`);
     console.log(`Comptes (mot de passe « ${r.password} ») :`);
     for (const [k, u] of Object.entries(r.users)) console.log(`  ${k.padEnd(16)} ${u.email}`);

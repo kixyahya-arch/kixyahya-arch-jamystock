@@ -71,6 +71,11 @@ export interface MonthlyInvoiceInput {
   /** nombre de jours du mois civil */
   daysInMonth: number;
   services: ServiceUsage[];
+  /**
+   * jours du mois couverts par le contrat (prorata de l'abonnement). Par défaut : nombre d'instantanés.
+   * À passer quand des instantanés manquent : la moyenne se fait sur ceux disponibles, le prorata sur le contrat.
+   */
+  coveredDays?: number;
   /** code de prestation → famille utilisée pour le quota inclus (ex. LIVRAISON_ZONE_1 → LIVRAISON) */
   serviceFamily?: (code: string) => string;
 }
@@ -84,7 +89,7 @@ const defaultFamily = (code: string): string => code.split('_')[0] ?? code;
 export function computeMonthlyInvoice(input: MonthlyInvoiceInput): InvoiceDraft {
   const { terms, dailyM2, daysInMonth } = input;
   const lines: InvoiceLine[] = [];
-  const coveredDays = dailyM2.length;
+  const coveredDays = input.coveredDays ?? dailyM2.length;
   if (coveredDays > daysInMonth) throw new Error('Plus de jours couverts que de jours dans le mois');
 
   const prorata = coveredDays / daysInMonth;
@@ -168,11 +173,125 @@ export function creditNoteLines(lines: InvoiceLine[], ratio = 1): InvoiceLine[] 
   return lines.map((l) => ({
     ...l,
     label: `Avoir : ${l.label}`,
+    quantity: ratio === 1 ? l.quantity : Math.round(l.quantity * ratio * 10000) / 10000,
+    unitPriceCents: -l.unitPriceCents,
     totalHtCents: -Math.round(l.totalHtCents * ratio),
   }));
+}
+
+/**
+ * Avoir partiel d'un montant HT donné (FAC-04) : une ligne par taux de TVA de la facture d'origine,
+ * au prorata de la base de chaque taux, la dernière absorbant l'arrondi pour tomber juste.
+ */
+export function partialCreditLines(origin: Pick<InvoiceLine, 'totalHtCents' | 'vatRate'>[], amountHtCents: number, label: string): InvoiceLine[] {
+  const byRate = new Map<number, number>();
+  for (const l of origin) byRate.set(l.vatRate, (byRate.get(l.vatRate) ?? 0) + l.totalHtCents);
+  const base = [...byRate.values()].reduce((s, v) => s + v, 0);
+  if (base <= 0) throw new Error('Facture d’origine sans montant');
+  const rates = [...byRate.entries()].filter(([, v]) => v > 0);
+  let left = amountHtCents;
+  return rates.map(([rate, v], i) => {
+    const part = i === rates.length - 1 ? left : Math.round((amountHtCents * v) / base);
+    left -= part;
+    return {
+      type: 'PRESTATION' as const,
+      label: rates.length > 1 ? `${label} (TVA ${rate} %)` : label,
+      quantity: 1,
+      unit: 'forfait',
+      unitPriceCents: -part,
+      vatRate: rate,
+      totalHtCents: -part,
+    };
+  });
 }
 
 /** Numérotation chronologique continue (FAC-03) : préfixe-année-séquence. */
 export function formatDocumentNumber(prefix: string, year: number, seq: number): string {
   return `${prefix}-${year}-${String(seq).padStart(6, '0')}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Calendrier de facturation (FAC-02, FAC-03) : tout est exprimé en jours calendaires à Paris.
+
+/** Date (AAAA-MM-JJ), heure et minute à Paris d'un instant. */
+export function parisClock(at: Date): { date: string; hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const v = (t: string) => parts.find((p) => p.type === t)!.value;
+  return { date: `${v('year')}-${v('month')}-${v('day')}`, hour: Number(v('hour')), minute: Number(v('minute')) };
+}
+
+/** Décale une date calendaire AAAA-MM-JJ de n jours. */
+export function addIsoDays(date: string, n: number): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Nombre de jours de from à to inclus (0 si to < from). */
+export function daysBetweenInclusive(from: string, to: string): number {
+  const ms = Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`);
+  return ms < 0 ? 0 : Math.round(ms / 86_400_000) + 1;
+}
+
+/** Mois civil AAAA-MM : premier et dernier jour, nombre de jours. */
+export function monthBounds(month: string): { start: string; end: string; days: number } {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error(`Mois invalide : ${month}`);
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { start: `${month}-01`, end: `${month}-${String(days).padStart(2, '0')}`, days };
+}
+
+/** Mois civil qui précède celui de la date donnée. */
+export function previousMonth(date: string): string {
+  return addIsoDays(`${date.slice(0, 7)}-01`, -1).slice(0, 7);
+}
+
+/**
+ * Intersection d'un contrat (date_debut, date_fin incluse ou ouverte) avec un mois : jours facturables
+ * (RG-M2-06, premier et dernier mois au prorata). null si le contrat ne couvre aucun jour du mois.
+ */
+export function contractPeriodInMonth(month: string, start: string, end: string | null): { from: string; to: string; days: number } | null {
+  const b = monthBounds(month);
+  const from = start > b.start ? start : b.start;
+  const to = end && end < b.end ? end : b.end;
+  const days = daysBetweenInclusive(from, to);
+  return days > 0 ? { from, to, days } : null;
+}
+
+/** Brouillons créés le 1er du mois à 2 h (Paris), émis automatiquement à J+2 sauf blocage (FAC-03). */
+export const DRAFT_HOUR = 2;
+export const AUTO_ISSUE_DELAY_DAYS = 2;
+
+/** Les brouillons du mois précédent sont dus dès le 1er à 2 h (rattrapage si le service dormait). */
+export function draftsDue(at: Date): string | null {
+  const c = parisClock(at);
+  if (c.date.endsWith('-01') && c.hour < DRAFT_HOUR) return null;
+  return previousMonth(c.date);
+}
+
+/**
+ * Avoir partiel ou total (FAC-04) : part de la facture d'origine à annuler, d'après le montant HT demandé
+ * et ce qui a déjà été crédité. Lève une erreur si le montant dépasse le solde créditable.
+ */
+export function creditRatio(invoiceHtCents: number, alreadyCreditedHtCents: number, requestedHtCents?: number): number {
+  const left = invoiceHtCents - alreadyCreditedHtCents;
+  if (left <= 0) throw new Error('Cette facture est déjà entièrement créditée');
+  const amount = requestedHtCents ?? left;
+  if (amount <= 0) throw new Error("Le montant d'un avoir doit être positif");
+  if (amount > left) throw new Error(`Le montant dépasse le solde créditable (${(left / 100).toFixed(2)} € HT)`);
+  return amount / invoiceHtCents;
+}
+
+/** Montant en euros au format français, sans espace insécable fine (non imprimable dans les polices PDF standard). */
+export function formatEuros(cents: number): string {
+  const s = (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${s.replace(/[\u202f\u00a0]/g, ' ')} €`;
 }

@@ -8,7 +8,11 @@ export type Route =
   | { name: 'clients' }
   | { name: 'client'; id: string }
   | { name: 'nouveau-client' }
-  | { name: 'stock' };
+  | { name: 'stock' }
+  | { name: 'facturation' }
+  | { name: 'facture'; id: string }
+  | { name: 'tarifs' }
+  | { name: 'surfaces'; client?: string };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/');
@@ -18,6 +22,10 @@ export function parse(hash: string): Route {
   if (a === 'clients' && b) return { name: 'client', id: b };
   if (a === 'clients') return { name: 'clients' };
   if (a === 'stock') return { name: 'stock' };
+  if (a === 'facturation' && b === 'tarifs') return { name: 'tarifs' };
+  if (a === 'facturation' && b === 'surfaces') return { name: 'surfaces', client: hash.split('/')[3] || undefined };
+  if (a === 'facturation' && b) return { name: 'facture', id: b };
+  if (a === 'facturation') return { name: 'facturation' };
   return { name: 'demandes' };
 }
 
@@ -33,6 +41,12 @@ export function href(r: Route): string {
       return '#/clients/nouveau';
     case 'demandes':
       return '#/';
+    case 'facture':
+      return `#/facturation/${r.id}`;
+    case 'tarifs':
+      return '#/facturation/tarifs';
+    case 'surfaces':
+      return r.client ? `#/facturation/surfaces/${r.client}` : '#/facturation/surfaces';
     default:
       return `#/${r.name}`;
   }
