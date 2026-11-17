@@ -144,7 +144,7 @@ describe('étiquettes (WMS-03)', () => {
     const zpl = await post(admin, '/bo/warehouse/labels', { kind: 'EMPLACEMENT', ids: ids.slice(0, 2), format: 'ZEBRA_50x25', sortie: 'ZPL' });
     expect(zpl.headers['content-type']).toContain('text/plain');
     expect((zpl.text.match(/\^XA/g) ?? []).length).toBe(2);
-    expect(zpl.text).toContain('Depot Sud');
+    expect(zpl.text).toMatch(/Depot Sud - E[A-Z0-9]{10}|Depot Sud . E/);
 
     const art = await postBin(admin, '/bo/warehouse/labels', { kind: 'ARTICLE', ids: t.data.articles.tilleuls.slice(0, 2), format: 'ZEBRA_100x50' });
     expect(art.status).toBe(200);

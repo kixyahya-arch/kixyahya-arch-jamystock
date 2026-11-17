@@ -305,7 +305,7 @@ export function zplText(s: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/[’‘]/g, "'")
     .replace(/[«»“”]/g, '"')
-    .replace(/[–—]/g, '-')
+    .replace(/[–—·]/g, '-')
     .replace(/[^\x20-\x7E]/g, '')
     .replace(/[\^~]/g, '-');
 }
@@ -339,7 +339,7 @@ export function zplLabel(label: LabelContent, format: ZebraFormatId): string {
     label.sousTitre
       ? `^FO${textX},${big ? 120 : 62}^FB${textW},${big ? 4 : 3},4,L^A0N,${subH},${Math.round(subH * 0.85)}^FD${ellipsis(zplText(label.sousTitre), big ? 120 : 60)}^FS`
       : '',
-    `^FO${textX},${h - (big ? 56 : 30)}^A0N,${big ? 30 : 18},${big ? 26 : 16}^FD${ellipsis(zplText(label.depot), chars(big ? 16 : 10))}^FS`,
+    `^FO${textX},${h - (big ? 56 : 28)}^A0N,${big ? 30 : 16},${big ? 26 : 13}^FD${ellipsis(zplText(label.depot), chars(big ? 15 : 9))}^FS`,
     '^PQ1',
     '^XZ',
   ]

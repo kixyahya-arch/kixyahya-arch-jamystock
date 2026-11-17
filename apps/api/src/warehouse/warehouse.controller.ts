@@ -773,7 +773,7 @@ export class WarehouseController {
           WHERE e.id = ANY($1)`,
         [ids],
       );
-      return order(r.rows).map((e) => ({ qr: qrUrl(e.qr_code), titre: e.code, sousTitre: sub(e.chemin, e.depot), depot: e.depot }));
+      return order(r.rows).map((e) => ({ qr: qrUrl(e.qr_code), titre: e.code, sousTitre: sub(e.chemin, e.depot), depot: `${e.depot} · ${e.qr_code}` }));
     }
     if (kind === 'ARTICLE') {
       const r = await tx.query<{ id: string; qr_code: string; libelle: string; client: string; depot: string | null }>(
