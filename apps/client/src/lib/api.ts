@@ -105,6 +105,22 @@ export async function login(email: string, password: string, mfaCode?: string): 
   return s;
 }
 
+/** ADM-03 : activation d'un compte invité ; ouvre directement la session. */
+export async function acceptInvitation(token: string, password: string): Promise<Session> {
+  const res = await raw('/auth/invitation/accept', { method: 'POST', body: JSON.stringify({ token, password, deviceId: deviceId() }) });
+  const t = await parse<Session>(res);
+  saveSession(t);
+  const me = await api<Session['user']>('/auth/me');
+  const s = { ...t, user: me };
+  saveSession(s);
+  return s;
+}
+
+/** Lecture sans session (page d'invitation). */
+export async function publicGet<T>(path: string): Promise<T> {
+  return parse<T>(await raw(path));
+}
+
 export async function logout(): Promise<void> {
   const s = current;
   saveSession(null);
@@ -128,6 +144,7 @@ export function deviceId(): string {
 /** Raccourcis JSON */
 export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body: JSON.stringify(body) });
+export const put = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
 
 /** Fichier binaire (PDF, ZIP) avec la session. */

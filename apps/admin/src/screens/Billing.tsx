@@ -173,11 +173,12 @@ export function Invoices({ ctx }: { ctx: BoContext }) {
             disabled={busy}
             onClick={() =>
               void run(async () => {
-                const r = await post<{ instantanes: number; brouillons: { mois: string; crees: number } | null; emises: string[] }>('/bo/billing/run');
+                const r = await post<{ instantanes: number; brouillons: { mois: string; crees: number } | null; emises: string[]; prelevements: { tentes: number; refuses: number } | null }>('/bo/billing/run');
                 const parts = [
                   r.instantanes ? `${r.instantanes} instantané(s) rattrapé(s)` : '',
                   r.brouillons ? `${r.brouillons.crees} brouillon(s) pour ${monthFr(r.brouillons.mois)}` : '',
                   r.emises.length ? `émises : ${r.emises.join(', ')}` : '',
+                  r.prelevements?.tentes ? `${r.prelevements.tentes} prélèvement(s) lancé(s)${r.prelevements.refuses ? `, ${r.prelevements.refuses} refusé(s)` : ''}` : '',
                 ].filter(Boolean);
                 return parts.length ? `Tâches lancées : ${parts.join(' ; ')}.` : 'Tâches lancées : tout était déjà à jour.';
               })

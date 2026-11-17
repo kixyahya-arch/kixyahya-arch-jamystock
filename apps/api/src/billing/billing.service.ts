@@ -23,6 +23,7 @@ import { conflict, notFound, unprocessable } from '../common/errors.js';
 import { liveSurface } from '../client/client.controller.js';
 import { StorageService } from '../storage/storage.service.js';
 import { blPdf, invoicePdf, type Issuer } from './pdf.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 /** null = tâche automatique (pas d'utilisateur derrière l'action). */
 export type Actor = AuthUser | null;
@@ -364,16 +365,34 @@ export class BillingService {
     const prefix = f.type === 'AVOIR' ? 'AV' : 'FA';
     const seq = (await tx.query<{ n: number }>('SELECT prochain_numero($1, $2, $3) AS n', [tenantId, prefix, year])).rows[0]!.n;
     const numero = formatDocumentNumber(prefix, year, seq);
-    const ent = (await tx.query<{ conditions_paiement: string | null }>('SELECT conditions_paiement FROM entreprise WHERE id = $1', [f.entreprise_id])).rows[0]!;
+    const ent = (
+      await tx.query<{ conditions_paiement: string | null; bon_de_commande: string | null; email_facturation: string | null; prelevement: boolean }>(
+        `SELECT conditions_paiement, bon_de_commande, email_facturation,
+                (stripe_payment_method_id IS NOT NULL AND moyen_paiement IN ('CARTE','SEPA')) AS prelevement
+           FROM entreprise WHERE id = $1`,
+        [f.entreprise_id],
+      )
+    ).rows[0]!;
     const echeance = f.type === 'AVOIR' ? null : addIsoDays(parisClock(at).date, paymentDays(ent.conditions_paiement));
-    const issued: FactureRow = { ...f, numero, emise_le: at, echeance, statut: 'EMISE' };
+    // ADM-04 : le bon de commande du client est rappelé sur la facture
+    const bonDeCommande = f.bon_de_commande ?? ent.bon_de_commande;
+    const issued: FactureRow = { ...f, numero, emise_le: at, echeance, statut: 'EMISE', bon_de_commande: bonDeCommande };
     const pdf = await this.renderInvoice(tx, issued);
     const key = `${tenantId}/factures/${numero}.pdf`;
     await this.storage.put(key, pdf);
     await tx.query(
-      `UPDATE facture SET numero = $2, statut = 'EMISE', emise_le = $3, echeance = $4, cle_pdf = $5, empreinte_sha256 = $6, updated_at = now() WHERE id = $1`,
-      [id, numero, at, echeance, key, sha256(pdf)],
+      `UPDATE facture SET numero = $2, statut = 'EMISE', emise_le = $3, echeance = $4, cle_pdf = $5, empreinte_sha256 = $6, bon_de_commande = $7, updated_at = now() WHERE id = $1`,
+      [id, numero, at, echeance, key, sha256(pdf), bonDeCommande],
     );
+    if (f.type === 'FACTURE') {
+      // §6.3 : « facture émise » au contact facturation, à défaut aux administrateurs du compte client
+      const vars = { factureId: id, numero, totalTtcCents: f.total_ttc_cents, echeance, prelevement: ent.prelevement };
+      if (ent.email_facturation) await NotificationsService.enqueue(tx, tenantId, { modele: 'FACTURE_EMISE', adresse: ent.email_facturation, variables: vars });
+      else {
+        const admins = await tx.query<{ id: string }>(`SELECT id FROM utilisateur WHERE entreprise_id = $1 AND role IN ('B2B_ADMIN','B2C') AND statut = 'ACTIF'`, [f.entreprise_id]);
+        for (const a of admins.rows) await NotificationsService.enqueue(tx, tenantId, { modele: 'FACTURE_EMISE', destinataireId: a.id, variables: vars });
+      }
+    }
     if (f.forfait_id) {
       // une grille utilisée pour facturer ne se modifie plus en place (FAC-01 : nouvelle version)
       await tx.query('UPDATE grille_tarifaire SET utilisee = true WHERE id = (SELECT grille_tarifaire_id FROM forfait WHERE id = $1) AND NOT utilisee', [f.forfait_id]);

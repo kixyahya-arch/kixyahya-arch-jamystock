@@ -108,6 +108,17 @@ export function ClientView({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [projet, setProjet] = useState('');
   const canEdit = getSession()?.user?.role === 'SUPER_ADMIN';
+  // lien d'activation du contact (renvoyé seulement quand aucun service d'e-mail n'est configuré)
+  const [invite, setInvite] = useState<{ nom: string; lien: string } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(`jamystock.invitation.${id}`);
+      sessionStorage.removeItem(`jamystock.invitation.${id}`);
+      return raw ? (JSON.parse(raw) as { nom: string; lien: string }) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(() => {
     get<ClientDetail>(`/bo/clients/${id}`)
@@ -193,6 +204,15 @@ export function ClientView({ id }: { id: string }) {
 
           <section className="panel">
             <h2>Utilisateurs</h2>
+            {notice && <Banner kind="ok">{notice}</Banner>}
+            {error && <Banner kind="error">{error}</Banner>}
+            {invite && (
+              <div className="invite-link">
+                <strong>Lien d’activation de {invite.nom}</strong>
+                <p className="hint">Aucun service d’e-mail n’est configuré : transmettez ce lien au client. Valable 7 jours, à usage unique.</p>
+                <input readOnly value={invite.lien} className="mono" onFocus={(e) => e.target.select()} aria-label="Lien d’activation" />
+              </div>
+            )}
             <table className="table compact">
               <tbody>
                 {c.utilisateurs.map((u) => (
@@ -206,6 +226,26 @@ export function ClientView({ id }: { id: string }) {
                       <StatusPill label={USER_STATUS[u.statut] ?? u.statut} tone={u.statut === 'INVITE' ? 'lime' : u.statut === 'DESACTIVE' ? 'alert' : 'neutral'} />
                     </td>
                     <td className="muted">{u.derniereConnexion ? `Vu le ${dateFr(u.derniereConnexion)}` : 'Jamais connecté'}</td>
+                    <td>
+                      {canEdit && u.statut === 'INVITE' && (
+                        <button
+                          type="button"
+                          className="btn small"
+                          onClick={async () => {
+                            try {
+                              const r = await post<{ lien?: string }>(`/bo/clients/${c.id}/users/${u.id}/invite`);
+                              setInvite(r.lien ? { nom: u.nom, lien: r.lien } : null);
+                              setNotice(r.lien ? null : `Invitation renvoyée à ${u.email}.`);
+                              setError(null);
+                            } catch (err) {
+                              setError((err as Error).message);
+                            }
+                          }}
+                        >
+                          Renvoyer l’invitation
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -247,8 +287,24 @@ export function ClientView({ id }: { id: string }) {
               <dd className="mono">{c.tvaIntracom ?? '—'}</dd>
               <dt>Adresse</dt>
               <dd>{c.adresseFacturation?.libelle ?? '—'}</dd>
-              <dt>Paiement</dt>
+              <dt>Conditions</dt>
               <dd>{c.conditionsPaiement ?? '—'}</dd>
+              <dt>Moyen</dt>
+              <dd>
+                {c.moyenPaiement === 'CARTE' && c.moyenDetail
+                  ? `Carte ${c.moyenDetail.marque ?? ''} •••• ${c.moyenDetail.derniers4}${c.moyenDetail.expire ? ` (exp. ${c.moyenDetail.expire})` : ''}`
+                  : c.moyenPaiement === 'SEPA' && c.moyenDetail
+                    ? `Prélèvement SEPA •••• ${c.moyenDetail.derniers4}`
+                    : c.moyenPaiement === 'VIREMENT'
+                      ? 'Virement'
+                      : c.type === 'B2C'
+                        ? 'Carte non enregistrée'
+                        : 'Virement (par défaut)'}
+              </dd>
+              <dt>Bon de commande</dt>
+              <dd className="mono">{c.bonDeCommande ?? '—'}</dd>
+              <dt>Email factures</dt>
+              <dd>{c.emailFacturation ?? 'Administrateurs du compte'}</dd>
             </dl>
           </section>
         </aside>
@@ -300,7 +356,7 @@ export function NewClient() {
           setBusy(true);
           setError(null);
           try {
-            const r = await post<{ id: string }>('/bo/clients', {
+            const r = await post<{ id: string; invitation?: { lien?: string } }>('/bo/clients', {
               type,
               nom: form.nom,
               ...(form.siret ? { siret: form.siret } : {}),
@@ -321,6 +377,13 @@ export function NewClient() {
                   }
                 : {}),
             });
+            if (r.invitation?.lien) {
+              try {
+                sessionStorage.setItem(`jamystock.invitation.${r.id}`, JSON.stringify({ nom: form.contactNom, lien: r.invitation.lien }));
+              } catch {
+                /* stockage indisponible : le lien reste renvoyable depuis la fiche */
+              }
+            }
             go({ name: 'client', id: r.id });
           } catch (err) {
             setError(err instanceof Error ? err.message : String(err));

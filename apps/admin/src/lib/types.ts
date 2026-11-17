@@ -132,6 +132,10 @@ export interface ClientDetail {
   conditionsPaiement: string | null;
   statut: string;
   creeLe: string;
+  emailFacturation: string | null;
+  bonDeCommande: string | null;
+  moyenPaiement: 'CARTE' | 'SEPA' | 'VIREMENT' | null;
+  moyenDetail: { type: string; marque?: string; derniers4: string; expire?: string } | null;
   projets: { id: string; nom: string; statut: string; nbArticles: number }[];
   utilisateurs: { id: string; nom: string; email: string; role: string; statut: string; derniereConnexion: string | null }[];
   forfait: {

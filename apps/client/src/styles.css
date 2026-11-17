@@ -179,6 +179,7 @@ button {
   gap: 10px;
 }
 .who {
+  text-decoration: none;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -203,7 +204,7 @@ button {
     margin-left: auto;
   }
   .who {
-    display: none;
+    max-width: 110px;
   }
 }
 
@@ -1194,4 +1195,220 @@ label.inline {
     grid-column: 2;
     justify-items: start;
   }
+}
+
+.who:hover,
+.who[aria-current='page'] {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ——— Utilisateurs (ADM-03) ——— */
+.page-head.with-action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+.page-head.with-action > div {
+  flex: 1 1 420px;
+}
+.link-callout .copy-row {
+  display: flex;
+  gap: 8px;
+}
+.link-callout .copy-row input {
+  flex: 1;
+  max-width: none;
+  min-width: 0;
+  background: #fff;
+  color: #000;
+  font-size: 0.85rem;
+}
+.user-form {
+  margin: 20px 0 8px;
+}
+.user-form h2,
+.form-card h2 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+.user-list {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  border-top: 1.5px solid var(--ink);
+}
+.user-list > li {
+  display: grid;
+  gap: 10px;
+  padding: 18px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.user-list > li.off {
+  opacity: 0.6;
+}
+.user-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--muted-bg);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.user-main {
+  display: grid;
+  min-width: 0;
+}
+.user-main strong {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+.user-main .muted,
+.muted {
+  color: var(--muted);
+}
+.user-main > .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
+}
+.user-role {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.user-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding-left: 58px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.user-list .row-actions {
+  padding-left: 58px;
+}
+.user-edit {
+  display: grid;
+  gap: 4px;
+  max-width: 640px;
+  margin-left: 58px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+@media (max-width: 640px) {
+  .user-head {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .user-role,
+  .user-head .status {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .user-meta,
+  .user-list .row-actions {
+    padding-left: 0;
+  }
+  .user-edit {
+    margin-left: 0;
+  }
+  .link-callout .copy-row {
+    flex-direction: column;
+  }
+}
+
+/* ——— Mon compte (ADM-04) ——— */
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.account-grid .form-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.account-grid .form-card > .btn {
+  justify-self: start;
+  margin-top: 8px;
+}
+.pay-current {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+.pay-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pay-choice {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.pay-choice input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: var(--ink);
+}
+.facts.bank {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+  font-size: 0.92rem;
+}
+.facts.bank dt {
+  color: var(--muted);
+}
+.facts.bank dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.hint.small {
+  font-size: 0.85rem;
+}
+
+/* ——— Invitation ——— */
+.invite-intro {
+  margin: 0 0 8px;
+  color: #ddd;
+  line-height: 1.5;
+}
+.login .pw-rule {
+  display: block;
+  margin-top: 6px;
+  color: #aaa;
+}
+.login .pw-rule.ok {
+  color: var(--lime);
+}
+.login input[readonly] {
+  color: #aaa;
+}
+.doc-amount .btn {
+  margin-top: 4px;
 }

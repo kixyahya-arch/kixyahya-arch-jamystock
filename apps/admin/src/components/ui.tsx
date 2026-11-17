@@ -14,7 +14,10 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'stock' }, label: 'Stock', active: route.name === 'stock' || route.name === 'article' },
     // tarifs et montants : Super Admin seulement (le Dispatcher n'y a pas accès, §2.2)
     ...(session.user?.role === 'SUPER_ADMIN'
-      ? [{ r: { name: 'facturation' } as Route, label: 'Facturation', active: ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) }]
+      ? [
+          { r: { name: 'facturation' } as Route, label: 'Facturation', active: ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) },
+          { r: { name: 'emails' } as Route, label: 'E-mails', active: route.name === 'emails' },
+        ]
       : []),
   ];
   return (

@@ -179,14 +179,32 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
   import CSV avec aperçu (WMS-02), étiquettes QR en planche A4 Avery ou ZPL Zebra 50 × 25 / 100 × 50 mm (WMS-03),
   corrections de stock motivées et tracées : déplacer, perdu, retrouvé, endommagé, détruit, scinder ou fusionner
   des palettes (WMS-06).
-- **C. Facturation** (faite, hors Stripe) : instantané m² quotidien à 23 h 59 avec rattrapage et correction motivée (FAC-01),
+- **C. Facturation** (faite) : instantané m² quotidien à 23 h 59 avec rattrapage et correction motivée (FAC-01),
   brouillons le 1er à 2 h puis émission automatique à J+2 sauf blocage, numérotation continue et PDF figé avec empreinte
   (FAC-02), avoirs partiels ou totaux et paiements (FAC-03), grilles versionnées et avenants (FAC-04), « Mes documents »
   côté client avec téléchargement ZIP (SUI-03). Les tâches tournent dans l'API (`BILLING_SCHEDULER`, actif par défaut en
   production) ; un service qui dort les rattrape au réveil, et le bouton « Lancer les tâches » les force. Avec
-  `SEED_DEMO=true`, deux mois de factures de démonstration sont produits par le vrai moteur. Paiement Stripe : plus tard.
-- **D. Reste du MVP** : génération d'emplacements en masse, étiquettes QR (PDF / ZPL), gestion des utilisateurs B2B,
-  documents, notifications email.
+  `SEED_DEMO=true`, deux mois de factures de démonstration sont produits par le vrai moteur.
+- **D. Comptes, paiement, e-mails** (fait) :
+  - Utilisateurs clients (ADM-03) : l'administrateur client invite par e-mail (lien valable 7 jours, à usage unique),
+    choisit Administrateur ou Utilisateur, attribue les projets un par un et désactive un accès, ce qui coupe la session
+    immédiatement. Le contact d'un nouveau client reçoit aussi une invitation.
+  - Facturation et paiement (ADM-04) : adresse, e-mail de facturation, bon de commande rappelé sur les factures.
+    Carte obligatoire pour un particulier, prélèvement SEPA ou virement pour un professionnel, enregistrés sur la page
+    sécurisée de Stripe. Les factures émises sont prélevées automatiquement, et une facture peut être payée en ligne.
+    Les webhooks Stripe (`/api/v1/stripe/webhook`) rapprochent les paiements sans double comptage.
+  - E-mails (§6.3) : file d'envoi avec reprises, modèles pour l'invitation, les commandes, la livraison, la mise en stock,
+    la facture et les paiements. Chacun règle ses préférences dans « Mon compte ». Le Back-Office montre chaque message
+    et son aperçu.
+
+### Variables d'environnement des services externes
+
+| Variable | Rôle | Sans elle |
+| --- | --- | --- |
+| `BREVO_API_KEY`, `MAIL_FROM`, `MAIL_FROM_NAME` | Envoi des e-mails par Brevo | Les messages sont préparés et visibles dans le Back-Office (« E-mails »), mais ne partent pas. Les liens d'invitation sont alors affichés à l'administrateur. |
+| `PUBLIC_URL` | Adresse de l'Espace Client dans les liens des e-mails | `RENDER_EXTERNAL_URL` sur Render |
+| `STRIPE_SECRET_KEY` | Carte, SEPA, prélèvements, paiement en ligne | Le paiement en ligne est masqué ; le virement reste proposé. |
+| `STRIPE_WEBHOOK_SECRET` | Signature des webhooks Stripe (événements `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`) | Les paiements ne sont pas rapprochés automatiquement. |
 
 Voir [docs/points-ouverts.md](docs/points-ouverts.md) pour les questions à trancher avec le client et les hypothèses prises,
 et [docs/charte-graphique.md](docs/charte-graphique.md) pour la charte visuelle commune aux trois applis.

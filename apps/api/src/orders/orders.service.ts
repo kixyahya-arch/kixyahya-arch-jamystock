@@ -324,7 +324,7 @@ export class OrdersService {
       await this.setStatus(tx, user, order, 'REFUSEE', motif);
       await tx.query('UPDATE commande SET valideur_id = $2, motif_refus = $3 WHERE id = $1', [order.id, user.id, motif]);
       await this.releaseArticles(tx, order.id);
-      await this.notify(tx, user, order, 'VALIDATION_REFUSEE');
+      await this.notify(tx, user, order, 'VALIDATION_REFUSEE', { motif });
       return this.present(tx, await this.load(tx, order.id));
     });
   }
@@ -380,7 +380,7 @@ export class OrdersService {
         input.creneau ?? null,
       ]);
       await this.createMissions(tx, user, { ...order, date_confirmee: input.date });
-      await this.notify(tx, user, order, 'CRENEAU_CONFIRME');
+      await this.notify(tx, user, order, 'CRENEAU_CONFIRME', { date: input.date });
       return this.present(tx, await this.load(tx, order.id));
     });
   }
@@ -390,7 +390,7 @@ export class OrdersService {
       const order = await this.load(tx, orderId, true);
       if (order.statut !== 'SOUMISE') throw conflict('STATUT', 'Contre-proposition possible uniquement sur une demande reçue');
       await tx.query('UPDATE commande SET date_contre_proposee = $2, message_dispatcher = $3 WHERE id = $1', [order.id, input.date, input.message ?? null]);
-      await this.notify(tx, user, order, 'CRENEAU_CONTRE_PROPOSE');
+      await this.notify(tx, user, order, 'CRENEAU_CONTRE_PROPOSE', { date: input.date });
       return this.present(tx, await this.load(tx, order.id));
     });
   }
@@ -514,13 +514,19 @@ export class OrdersService {
     await insert(order.type === 'RETRAIT' ? 'RETRAIT' : 'LIVRAISON', day, '08:00');
   }
 
-  /** Notifications (§6.3) : mises en file ; l'envoi effectif est fait par le worker (phase D). */
-  private async notify(tx: Tx, user: AuthUser, order: OrderRow, modele: string) {
-    await tx.query(
-      `INSERT INTO notification (id, tenant_id, destinataire_id, canal, modele, variables)
-       VALUES ($1, $2, $3, 'IN_APP', $4, $5)`,
-      [uuidv7(), user.tenantId, order.demandeur_id, modele, JSON.stringify({ commandeId: order.id, numero: order.numero })],
-    );
+  /** Notifications (§6.3) : in-app pour l'historique, e-mail envoyé par la file (NotificationsService). */
+  private async notify(tx: Tx, user: AuthUser, order: OrderRow, modele: string, extra: Record<string, unknown> = {}) {
+    const vars = JSON.stringify({ commandeId: order.id, numero: order.numero, ...extra });
+    // une demande de validation interne s'adresse aux administrateurs de l'entreprise, le reste au demandeur
+    const to =
+      modele === 'VALIDATION_REQUISE'
+        ? (await tx.query<{ id: string }>(`SELECT id FROM utilisateur WHERE entreprise_id = $1 AND role = 'B2B_ADMIN' AND statut = 'ACTIF'`, [order.entreprise_id])).rows.map((r) => r.id)
+        : [order.demandeur_id];
+    for (const id of to) {
+      for (const canal of ['IN_APP', 'EMAIL']) {
+        await tx.query(`INSERT INTO notification (id, tenant_id, destinataire_id, canal, modele, variables) VALUES ($1, $2, $3, $4, $5, $6)`, [uuidv7(), user.tenantId, id, canal, modele, vars]);
+      }
+    }
   }
 
   private async present(tx: Tx, order: OrderRow) {
