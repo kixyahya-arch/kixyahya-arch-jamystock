@@ -11,11 +11,13 @@ export type Route =
   | { name: 'documents' }
   | { name: 'compte' }
   | { name: 'utilisateurs' }
-  | { name: 'invitation'; token: string };
+  | { name: 'invitation'; token: string }
+  | { name: 'support'; token: string };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('?')[0]!.split('/');
   if (a === 'invitation' && b) return { name: 'invitation', token: b };
+  if (a === 'support' && b) return { name: 'support', token: b };
   if (a === 'compte') return { name: 'compte' };
   if (a === 'utilisateurs') return { name: 'utilisateurs' };
   if (a === 'article' && b) return { name: 'article', id: b };
@@ -37,6 +39,8 @@ export function href(r: Route): string {
       return '#/';
     case 'invitation':
       return `#/invitation/${r.token}`;
+    case 'support':
+      return `#/support/${r.token}`;
     default:
       return `#/${r.name}`;
   }

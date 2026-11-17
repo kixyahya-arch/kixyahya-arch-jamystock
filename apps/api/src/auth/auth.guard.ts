@@ -23,6 +23,10 @@ export class AuthGuard implements CanActivate {
     const user = await this.auth.verifyAccessToken(header.slice(7));
     await this.auth.assertSessionActive(user);
     req.user = user;
+    // CLI-02 : la session « en tant que » ne modifie rien
+    if (user.impersonation && !['GET', 'HEAD'].includes(req.method)) {
+      throw new BusinessError(403, 'LECTURE_SEULE', 'Mode support en lecture seule : aucune modification n’est possible depuis cette session.');
+    }
 
     const permission = this.reflector.getAllAndOverride<Permission | undefined>(REQUIRED_PERMISSION, targets);
     if (permission && !can(user.role, permission)) throw forbidden(`Permission ${permission} requise`);

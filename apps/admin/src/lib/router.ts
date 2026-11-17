@@ -16,7 +16,8 @@ export type Route =
   | { name: 'facture'; id: string }
   | { name: 'tarifs' }
   | { name: 'surfaces'; client?: string }
-  | { name: 'emails' };
+  | { name: 'emails' }
+  | { name: 'pilotage' };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/');
@@ -34,6 +35,7 @@ export function parse(hash: string): Route {
   if (a === 'facturation' && b) return { name: 'facture', id: b };
   if (a === 'facturation') return { name: 'facturation' };
   if (a === 'emails') return { name: 'emails' };
+  if (a === 'pilotage') return { name: 'pilotage' };
   return { name: 'demandes' };
 }
 

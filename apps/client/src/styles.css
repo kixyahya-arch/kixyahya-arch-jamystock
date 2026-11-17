@@ -1412,3 +1412,24 @@ label.inline {
 .doc-amount .btn {
   margin-top: 4px;
 }
+
+/* ——— CLI-02 : mode support ——— */
+.support-banner {
+  background: var(--lime, #e5ff31);
+  color: #000;
+  font-size: 0.92rem;
+}
+.support-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.support-banner .btn {
+  flex-shrink: 0;
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}

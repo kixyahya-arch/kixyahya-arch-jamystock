@@ -119,6 +119,26 @@ export function ClientView({ id }: { id: string }) {
     }
   });
   const [notice, setNotice] = useState<string | null>(null);
+  // CLI-02 : ouverture de l'Espace Client « en tant que » un utilisateur, avec motif
+  const [support, setSupport] = useState<{ userId: string; nom: string; motif: string } | null>(null);
+  const openSupport = async () => {
+    if (!support || !c) return;
+    // fenêtre ouverte tout de suite (sinon le navigateur la bloque), remplie quand le jeton arrive
+    const w = window.open('', '_blank');
+    try {
+      const r = await post<{ url: string; utilisateur: { nom: string } }>('/bo/support/impersonate', { entrepriseId: c.id, utilisateurId: support.userId, motif: support.motif });
+      if (w) {
+        w.opener = null;
+        w.location.href = r.url;
+      } else window.location.assign(r.url);
+      setNotice(`Espace de ${r.utilisateur.nom} ouvert dans un nouvel onglet, en lecture seule pendant 30 minutes.`);
+      setSupport(null);
+      setError(null);
+    } catch (err) {
+      w?.close();
+      setError((err as Error).message);
+    }
+  };
 
   const load = useCallback(() => {
     get<ClientDetail>(`/bo/clients/${id}`)
@@ -245,11 +265,40 @@ export function ClientView({ id }: { id: string }) {
                           Renvoyer l’invitation
                         </button>
                       )}
+                      {canEdit && u.statut === 'ACTIF' && (
+                        <button type="button" className="btn small" onClick={() => setSupport({ userId: u.id, nom: u.nom, motif: '' })} aria-expanded={support?.userId === u.id}>
+                          Voir son espace
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {support && (
+              <form
+                className="support-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void openSupport();
+                }}
+              >
+                <strong>Voir l’Espace Client comme {support.nom}</strong>
+                <p className="hint small">Lecture seule, 30 minutes. L’ouverture est enregistrée dans le journal d’audit avec le motif.</p>
+                <label>
+                  Motif
+                  <input value={support.motif} onChange={(e) => setSupport({ ...support, motif: e.target.value })} placeholder="Ticket 42 : le client ne voit pas une photo" required minLength={3} autoFocus />
+                </label>
+                <div className="row-actions">
+                  <button type="submit" className="btn primary small" disabled={support.motif.trim().length < 3}>
+                    Ouvrir en lecture seule
+                  </button>
+                  <button type="button" className="btn small" onClick={() => setSupport(null)}>
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
         </div>
 

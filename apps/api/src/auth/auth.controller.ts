@@ -56,7 +56,7 @@ export class AuthController {
 
   @Get('me')
   async me(@CurrentUser() user: AuthUser) {
-    return this.db.tx({ tenantId: user.tenantId, userId: user.id, role: user.role, entrepriseId: user.entrepriseId }, async (tx) => {
+    const me = await this.db.tx({ tenantId: user.tenantId, userId: user.id, role: user.role, entrepriseId: user.entrepriseId }, async (tx) => {
       const r = await tx.query(
         `SELECT u.id, u.email, u.nom, u.role, u.entreprise_id AS "entrepriseId", e.nom AS "entrepriseNom", e.type AS "entrepriseType",
                 coalesce((SELECT json_agg(json_build_object('projetId', ap.projet_id, 'peutCommander', ap.peut_commander))
@@ -66,5 +66,14 @@ export class AuthController {
       );
       return r.rows[0];
     });
+    // CLI-02 : l'Espace Client affiche un bandeau « mode support » ; le nom du Super Admin se lit en contexte système
+    const imp = user.impersonation;
+    const support = imp
+      ? {
+          par: (await this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, (tx) => tx.query<{ nom: string }>('SELECT nom FROM utilisateur WHERE id = $1', [imp.by]))).rows[0]?.nom ?? null,
+          expireLe: new Date(imp.exp * 1000).toISOString(),
+        }
+      : null;
+    return { ...me, support };
   }
 }

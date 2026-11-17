@@ -5,6 +5,7 @@ import { ROLE } from '../lib/labels';
 
 export function Shell({ session, route, onLogout, children }: { session: Session; route: Route; onLogout: () => void; children: ReactNode }) {
   const nav: { r: Route; label: string; active: boolean }[] = [
+    ...(session.user?.role === 'SUPER_ADMIN' ? [{ r: { name: 'pilotage' } as Route, label: 'Pilotage', active: route.name === 'pilotage' }] : []),
     { r: { name: 'demandes' }, label: 'Demandes', active: route.name === 'demandes' || route.name === 'demande' },
     { r: { name: 'planning' }, label: 'Planning', active: route.name === 'planning' },
     { r: { name: 'clients' }, label: 'Clients', active: route.name === 'clients' || route.name === 'client' || route.name === 'nouveau-client' },
