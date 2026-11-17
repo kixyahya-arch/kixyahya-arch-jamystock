@@ -8,7 +8,10 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'demandes' }, label: 'Demandes', active: route.name === 'demandes' || route.name === 'demande' },
     { r: { name: 'planning' }, label: 'Planning', active: route.name === 'planning' },
     { r: { name: 'clients' }, label: 'Clients', active: route.name === 'clients' || route.name === 'client' || route.name === 'nouveau-client' },
-    { r: { name: 'stock' }, label: 'Stock', active: route.name === 'stock' },
+    ...(session.user?.role === 'SUPER_ADMIN'
+      ? [{ r: { name: 'depots' } as Route, label: 'Dépôts', active: ['depots', 'depot'].includes(route.name) }]
+      : []),
+    { r: { name: 'stock' }, label: 'Stock', active: route.name === 'stock' || route.name === 'article' },
     // tarifs et montants : Super Admin seulement (le Dispatcher n'y a pas accès, §2.2)
     ...(session.user?.role === 'SUPER_ADMIN'
       ? [{ r: { name: 'facturation' } as Route, label: 'Facturation', active: ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) }]

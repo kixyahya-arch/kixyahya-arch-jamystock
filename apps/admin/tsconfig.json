@@ -8,7 +8,7 @@
     "types": ["vite/client"],
     "noEmit": true,
     "declaration": false,
-    "paths": {}
+    "paths": { "@jamystock/domain/browser": ["../../packages/domain/src/browser.ts"] }
   },
   "include": ["src", "test", "vite.config.ts"]
 }
