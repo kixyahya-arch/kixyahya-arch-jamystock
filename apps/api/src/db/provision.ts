@@ -7,6 +7,7 @@ import { DEMO_PASSWORD, seed } from './seed.js';
 import { seedDemoOrders } from './demo-orders.js';
 import { seedDemoBilling } from './demo-billing.js';
 import { seedDemoOnSite } from './demo-onsite.js';
+import { bootstrapProduction } from './bootstrap.js';
 import { hashPassword } from '../auth/auth.service.js';
 
 /**
@@ -14,7 +15,8 @@ import { hashPassword } from '../auth/auth.service.js';
  *  1. extensions ;
  *  2. rôles jamystock_app (groupe soumis à la RLS) et jamystock_api (connexion de l'API, mot de passe APP_DB_PASSWORD) ;
  *  3. migrations ;
- *  4. données de démonstration si SEED_DEMO=true et la base est vide ; sinon, réécriture des photos de démonstration
+ *  4. production (SEED_DEMO absent) : premier démarrage avec organisation, dépôt et administrateur invité (INIT_ADMIN_EMAIL) ;
+ *     données de démonstration si SEED_DEMO=true et la base est vide ; sinon, réécriture des photos de démonstration
  *     absentes du disque (un hébergeur sans disque persistant efface les fichiers à chaque redémarrage)
  *     et remise du mot de passe des comptes de démo (*.test) à DEMO_PASSWORD, qui peut changer après la seed.
  * Idempotent : se relance sans effet de bord.
@@ -65,6 +67,8 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
     if (factures) log(`${factures} facture(s) de démonstration créée(s)`);
     const surSite = await seedDemoOnSite(url, env.STORAGE_DIR ?? '.storage');
     if (surSite) log(`${surSite} objet(s) de démonstration installé(s) chez le client`);
+  } else {
+    await bootstrapProduction(url, env, log);
   }
 }
 

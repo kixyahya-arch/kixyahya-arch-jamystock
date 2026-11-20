@@ -327,7 +327,8 @@ function ArticlesImport({ onDone, onError }: { onDone: (m: string) => void; onEr
         const list = d.emplacements.filter((e) => e.adressable && e.statut === 'ACTIF');
         setLocs(list);
         const reception = new Set(d.zones.filter((z) => z.type === 'RECEPTION').map((z) => z.id));
-        const first = list.find((e) => reception.has((e as unknown as { zoneId: string }).zoneId)) ?? list[0];
+        const aRanger = list.find((e) => /a ?ranger/i.test(e.code.replace(/-/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+        const first = aRanger ?? list.find((e) => reception.has((e as unknown as { zoneId: string }).zoneId)) ?? list[0];
         setDefaut(first?.id ?? '');
       })
       .catch((e) => onError((e as Error).message));

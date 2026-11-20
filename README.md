@@ -82,6 +82,15 @@ est vide. Il se relance sans effet de bord. L'API se connecte ensuite avec `jamy
 et `APP_DB_PASSWORD`) et **refuse de démarrer** avec un rôle superutilisateur ou `BYPASSRLS`. Sans `TENANT_ID`,
 l'organisation unique de la base est prise.
 
+**Render (site réel)** : [render.production.yaml](render.production.yaml), indépendant de la démo. *New > Blueprint*, ce
+dépôt, *Blueprint Path* = `render.production.yaml`, saisir `INIT_ADMIN_EMAIL` (et la clé Brevo si elle est prête).
+Base *basic-256mb* sauvegardée, service *starter* toujours éveillé, disque de 10 Go pour les photos (`STORAGE_DIR`).
+Sans `SEED_DEMO`, le premier démarrage crée l'organisation, un dépôt (quai de réception et emplacement « À ranger ») et
+l'administrateur `INIT_ADMIN_EMAIL`, sans mot de passe : son lien d'activation (7 jours, usage unique) est écrit dans le
+journal de déploiement et envoyé par e-mail si Brevo est configuré. Ensuite, reprise de l'ancien logiciel depuis le
+Back-Office (*Clients > Reprise des données*) : comptes clients, stock, puis photos. Les photos sont ramenées à
+2 000 px en WebP pendant le rapatriement.
+
 Ailleurs (VM, Docker, autre PaaS) : même principe.
 
 ```bash
