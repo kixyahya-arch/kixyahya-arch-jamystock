@@ -177,7 +177,7 @@ button {
   display: flex;
   gap: 18px;
   flex: 1;
-  justify-content: center;
+  justify-content: safe center;
 }
 .main-nav a {
   font-size: 0.92rem;
@@ -194,6 +194,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .who {
   max-width: 160px;
@@ -203,7 +204,13 @@ button {
   font-size: 0.88rem;
   color: #c7d6e2;
 }
-@media (max-width: 900px) {
+/* le nom de l'utilisateur ne s'affiche que s'il y a la place, et le menu passe sur deux lignes avant de déborder */
+@media (max-width: 1600px) {
+  .who {
+    display: none;
+  }
+}
+@media (max-width: 1360px) {
   .header-row {
     flex-wrap: wrap;
     gap: 10px 16px;
@@ -1576,6 +1583,7 @@ label.inline input[type='checkbox'] {
 /* ——— Planning (FLX-03) ——— */
 .day-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -2940,4 +2948,13 @@ a.back {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* petits écrans : un libellé de bouton long passe à la ligne plutôt que de sortir de l'écran */
+@media (max-width: 640px) {
+  .btn {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
 }
