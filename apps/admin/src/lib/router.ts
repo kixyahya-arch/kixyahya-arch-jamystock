@@ -25,13 +25,15 @@ export type Route =
   | { name: 'tournees'; date?: string }
   | { name: 'carte' }
   | { name: 'modeles-email' }
-  | { name: 'modele-email'; id: string };
+  | { name: 'modele-email'; id: string }
+  | { name: 'reprise' };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/');
   if (a === 'demandes' && b) return { name: 'demande', id: b };
   if (a === 'planning') return b && /^\d{4}-\d{2}-\d{2}$/.test(b) ? { name: 'planning', date: b } : { name: 'planning' };
   if (a === 'clients' && b === 'nouveau') return { name: 'nouveau-client' };
+  if (a === 'clients' && b === 'reprise') return { name: 'reprise' };
   if (a === 'clients' && b) return { name: 'client', id: b };
   if (a === 'clients') return { name: 'clients' };
   if (a === 'stock' && b) return { name: 'article', id: b };
@@ -65,6 +67,8 @@ export function href(r: Route): string {
       return `#/clients/${r.id}`;
     case 'nouveau-client':
       return '#/clients/nouveau';
+    case 'reprise':
+      return '#/clients/reprise';
     case 'demandes':
       return '#/';
     case 'article':

@@ -82,6 +82,8 @@ export interface OrderDetail extends Omit<OrderRow, 'urgent' | 'missionsAAffecte
   vehiculeSuggere: string | null;
   descriptionCollecte: string | null;
   depotSansSignature?: boolean;
+  natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
+  destination?: { libelle?: string } | null;
   historique: { statut: string; le: string; par: string }[];
   lignes: {
     id: string;

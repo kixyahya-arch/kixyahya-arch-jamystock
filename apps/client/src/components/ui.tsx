@@ -8,6 +8,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
   const { count } = useCarts();
   const nav: { r: Route; label: string; active: boolean }[] = [
     { r: { name: 'inventaire' }, label: 'Mon stock', active: route.name === 'inventaire' || route.name === 'article' },
+    { r: { name: 'sites' }, label: 'Sur mes sites', active: route.name === 'sites' },
     { r: { name: 'commandes' }, label: 'Commandes', active: route.name === 'commandes' || route.name === 'commande' },
     { r: { name: 'collecte' }, label: 'Demander une collecte', active: route.name === 'collecte' },
     { r: { name: 'documents' }, label: 'Documents', active: route.name === 'documents' },
@@ -64,6 +65,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
             <div>
               <h4>Mon espace</h4>
               <a href={href({ name: 'inventaire' })}>Mon stock</a>
+              <a href={href({ name: 'sites' })}>Sur mes sites</a>
               <a href={href({ name: 'commandes' })}>Commandes</a>
               <a href={href({ name: 'collecte' })}>Collecte</a>
               <a href={href({ name: 'documents' })}>Documents</a>

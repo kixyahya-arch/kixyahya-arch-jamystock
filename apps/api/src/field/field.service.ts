@@ -114,6 +114,7 @@ const ACTION_PERMISSION: Record<FieldAction['type'], Permission> = {
   ARRIVE: 'delivery.execute',
   BL_SIGN: 'delivery.execute',
   PICKUP_SIGN: 'delivery.execute',
+  TRANSFER_DROP: 'delivery.execute',
   PHOTO_REQUEST_DONE: 'stock.move',
   LOCATION_COUNT: 'stock.move',
 };
@@ -234,6 +235,8 @@ export class FieldService {
         return this.blSign(tx, ctx, action.payload);
       case 'PICKUP_SIGN':
         return this.pickupSign(tx, ctx, action.payload);
+      case 'TRANSFER_DROP':
+        return this.transferDrop(tx, ctx, action.payload);
       case 'LOCATION_COUNT':
         return this.locationCount(tx, ctx, action.payload);
     }
@@ -482,6 +485,8 @@ export class FieldService {
           dateConfirmee: order.date_confirmee,
           creneau: order.creneau_confirme,
           depotSansSignature: order.depot_sans_signature,
+          natureCollecte: order.nature_collecte,
+          destination: order.destination,
         },
         lignes: sortByPath(lignes).map((l) => ({ ...l, vignette: l.vignette ? this.files.photoUrl(user.tenantId, l.vignette, 't') : null })),
         demande: mission.type === 'PHOTO' ? await this.photoRequestInfo(tx, user, mission) : null,
@@ -982,7 +987,36 @@ export class FieldService {
     const expected = pickupFingerprint(p);
     if (expected !== p.empreinte) throw conflict('EMPREINTE_INVALIDE', "L'empreinte du BL ne correspond pas à son contenu");
 
+    // objets déjà connus (retour ou transfert d'objets installés chez le client) : lignes de la commande
+    const known = new Map(
+      (
+        await tx.query<{ ligne: string; article_id: string }>(
+          'SELECT id AS ligne, article_id FROM ligne_commande WHERE commande_id = $1 AND article_id IS NOT NULL',
+          [order.id],
+        )
+      ).rows.map((l) => [l.article_id, l.ligne]),
+    );
+    const nature = order.nature_collecte ?? 'NOUVEAUX';
+    if (nature === 'TRANSFERT' && p.articles.some((a) => !known.has(a.articleId))) {
+      throw unprocessable('HORS_TRANSFERT', 'Un transfert ne porte que sur les objets demandés');
+    }
     for (const a of p.articles) {
+      const ligne = known.get(a.articleId);
+      if (ligne) {
+        const art = (await tx.query<ArticleRow>('SELECT * FROM article WHERE id = $1 FOR UPDATE', [a.articleId])).rows[0]!;
+        if (art.statut !== 'RESTITUE') throw conflict('STATUT_ARTICLE', `« ${art.libelle} » n’est plus chez le client`);
+        if (nature === 'TRANSFERT') {
+          await this.move(tx, ctx, art, { type: 'CHARGEMENT', missionId: mission.id, motif: 'Transfert vers un autre site' });
+        } else {
+          // retour au dépôt : il sera rangé à la réception comme une collecte, avec son QR d'origine
+          await this.move(tx, ctx, art, { type: 'RETOUR', toLocationId: null, missionId: mission.id, motif: 'Retour du site client' });
+          await tx.query('UPDATE article SET commande_collecte_id = $2 WHERE id = $1', [art.id, order.id]);
+        }
+        if (a.photos.length) await this.registerPhotos(tx, ctx, a.photos.map((x) => x.photoId), { articleId: art.id, contexte: 'ENLEVEMENT' });
+        await tx.query(`UPDATE ligne_commande SET statut_ligne = 'LIVREE' WHERE id = $1`, [ligne]);
+        known.delete(a.articleId);
+        continue;
+      }
       const qr = a.qr ? this.qr(a.qr, 'A') : null;
       if (qr) await this.claimBlankQr(tx, ctx.user, qr);
       await tx.query(
@@ -1009,9 +1043,42 @@ export class FieldService {
         p.gps?.precision ?? null, ctx.deviceId, expected,
       ],
     );
+    // objets demandés mais pas trouvés sur place
+    for (const ligne of known.values()) await tx.query(`UPDATE ligne_commande SET statut_ligne = 'MANQUANTE', active = false WHERE id = $1`, [ligne]);
     await this.orders.setStatus(tx, ctx.user, order, 'COLLECTEE');
+    // un transfert reste en cours jusqu'au dépôt sur le site de destination
+    if (nature !== 'TRANSFERT') await this.finishMission(tx, ctx, mission);
+    return { blId: p.blId, numero, empreinte: expected, nbArticles: p.articles.length, manquants: known.size };
+  }
+
+  /** Transfert de site à site : les objets chargés sont déposés sur le site de destination et y sont rattachés. */
+  private async transferDrop(tx: Tx, ctx: ActionCtx, p: Extract<FieldAction, { type: 'TRANSFER_DROP' }>['payload']) {
+    const mission = await this.mission(tx, ctx.user, p.missionId, true, ['COLLECTE']);
+    const order = await this.orders.load(tx, mission.commande_id!, true);
+    const o = order;
+    if (o.nature_collecte !== 'TRANSFERT') throw unprocessable('PAS_UN_TRANSFERT', 'Cette collecte n’est pas un transfert');
+    if (order.statut !== 'COLLECTEE') throw conflict('STATUT', `Commande au statut ${order.statut}`);
+    const arts = await tx.query<ArticleRow>(
+      `SELECT a.* FROM article a JOIN ligne_commande l ON l.article_id = a.id
+        WHERE l.commande_id = $1 AND l.statut_ligne = 'LIVREE' AND a.statut = 'EN_TRANSIT' FOR UPDATE OF a`,
+      [order.id],
+    );
+    const lieu = o.destination?.libelle ?? 'site de destination';
+    for (const a of arts.rows) {
+      await this.move(tx, ctx, a, { type: 'LIVRAISON', missionId: mission.id, motif: `Transfert : déposé ${lieu}, reçu par ${p.recuPar}` });
+      if (o.destination_projet_id) await tx.query('UPDATE article SET projet_id = $2 WHERE id = $1', [a.id, o.destination_projet_id]);
+    }
+    await tx.query(`UPDATE ligne_commande SET active = false WHERE commande_id = $1`, [order.id]);
+    await this.orders.setStatus(tx, ctx.user, order, 'LIVREE');
     await this.finishMission(tx, ctx, mission);
-    return { blId: p.blId, numero, empreinte: expected, nbArticles: p.articles.length };
+    await this.audit.record(tx, ctx.user, {
+      action: 'TRANSFERT_DEPOSE',
+      objet: 'commande',
+      objetId: order.id,
+      entrepriseId: order.entreprise_id,
+      apres: { nbArticles: arts.rows.length, recuPar: p.recuPar, lieu, gps: p.gps ?? null },
+    });
+    return { commandeId: order.id, nbArticles: arts.rows.length, statut: 'LIVREE' };
   }
 
   // =====================================================================================

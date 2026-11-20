@@ -529,6 +529,7 @@ export class WarehouseController {
       const a = (
         await tx.query(
           `SELECT a.id, a.qr_code AS "qrCode", a.libelle, a.statut, a.etat, a.date_entree AS "dateEntree",
+                  a.couleur, a.emplacement_origine AS "emplacementOrigine", a.ancien_code AS "ancienCode", a.description,
                   en.nom AS client, p.nom AS projet, c.nom AS categorie,
                   e.id AS "emplacementId", e.code AS "emplacementCode", e.chemin AS emplacement,
                   u.id AS "umId", u.qr_code AS "umQr", u.type AS "umType",

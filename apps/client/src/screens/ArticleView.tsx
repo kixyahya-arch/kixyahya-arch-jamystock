@@ -73,12 +73,18 @@ export function ArticleView({ id, canOrder }: { id: string; canOrder: boolean })
                 <dd>{a.poids_kg} kg</dd>
               </>
             )}
+            {a.couleur && (
+              <>
+                <dt>Couleur</dt>
+                <dd>{a.couleur}</dd>
+              </>
+            )}
             <dt>Empilable</dt>
             <dd>{a.empilable ? 'Oui' : 'Non'}</dd>
             <dt>Entré au dépôt</dt>
             <dd>{dateFr(a.date_entree)}</dd>
             <dt>Emplacement</dt>
-            <dd>{a.localisation ?? '—'}</dd>
+            <dd>{a.statut === 'RESTITUE' ? `Sur site${a.projet ? ` : ${a.projet}` : ''}` : (a.localisation ?? '—')}</dd>
             <dt>Étiquette</dt>
             <dd className="mono">{a.qr_code}</dd>
           </dl>

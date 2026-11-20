@@ -65,6 +65,10 @@ const Action = z.discriminatedUnion('type', [
       signataire, signatureSvg: z.string().max(500_000), signedAt: iso, gps: gps.optional(), empreinte: z.string().regex(/^[0-9a-f]{64}$/),
     }),
   }),
+  z.object({
+    type: z.literal('TRANSFER_DROP'),
+    payload: z.object({ missionId: uuid, recuPar: z.string().trim().min(2).max(120), gps: gps.optional() }),
+  }),
 ]);
 
 const SyncBody = z.object({

@@ -105,7 +105,7 @@ export function OrderView({ id, role }: { id: string; role: string }) {
   };
 
   if (!o) return error ? <Banner kind="error">{error}</Banner> : <p className="hint">Chargement…</p>;
-  const steps = STEPS[o.type] ?? [];
+  const steps = o.natureCollecte === 'TRANSFERT' ? ['SOUMISE', 'PLANIFIEE', 'COLLECTEE', 'LIVREE'] : (STEPS[o.type] ?? []);
   const reachedAt = (s: string) => o.historique.find((h) => h.statut === s || (s === 'LIVREE' && h.statut === 'LIVREE_AVEC_RESERVES'))?.le;
   const currentIdx = steps.findIndex((s) => s === o.statut || (s === 'LIVREE' && o.statut === 'LIVREE_AVEC_RESERVES'));
   const canCancel = EDITABLE.includes(o.statut) || o.statut === 'PLANIFIEE';
@@ -190,7 +190,9 @@ export function OrderView({ id, role }: { id: string; role: string }) {
             {o.lignes.map((l) => (
               <li key={l.id}>
                 {l.articleId ? <a href={href({ name: 'article', id: l.articleId })}>{l.libelle}</a> : <span>{l.descriptionLibre}</span>}
-                <small className="hint">{l.statutLigne === 'MANQUANTE' ? 'Introuvable au dépôt' : l.statutLigne === 'REFUSEE' ? 'Refusé à la livraison' : ''}</small>
+                <small className="hint">
+                  {l.statutLigne === 'MANQUANTE' ? (o.type === 'COLLECTE' ? 'Introuvable sur place' : 'Introuvable au dépôt') : l.statutLigne === 'REFUSEE' ? 'Refusé à la livraison' : ''}
+                </small>
               </li>
             ))}
           </ul>
@@ -200,10 +202,22 @@ export function OrderView({ id, role }: { id: string; role: string }) {
           <dl className="specs">
             <dt>Date</dt>
             <dd>{o.dateConfirmee ? `${dateFr(o.dateConfirmee)}${o.creneauConfirme ? `, ${o.creneauConfirme}` : ''} (confirmée)` : `${dateFr(o.dateSouhaitee)} (souhaitée)`}</dd>
+            {o.natureCollecte && o.natureCollecte !== 'NOUVEAUX' && (
+              <>
+                <dt>Nature</dt>
+                <dd>{o.natureCollecte === 'RETOUR' ? 'Retour au dépôt d’objets installés sur site' : 'Transfert vers un autre site'}</dd>
+              </>
+            )}
             {o.adresse && (
               <>
-                <dt>Adresse</dt>
+                <dt>{o.natureCollecte === 'TRANSFERT' ? 'Reprise à' : 'Adresse'}</dt>
                 <dd>{o.adresse.libelle}</dd>
+              </>
+            )}
+            {o.destination && (
+              <>
+                <dt>Destination</dt>
+                <dd>{o.destination.libelle}</dd>
               </>
             )}
             {o.contactSite && (
@@ -227,7 +241,7 @@ export function OrderView({ id, role }: { id: string; role: string }) {
               </>
             )}
           </dl>
-          {['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE'].includes(o.statut) && <AfterDelivery orderId={o.id} />}
+          {o.type !== 'COLLECTE' && ['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE'].includes(o.statut) && <AfterDelivery orderId={o.id} />}
           {canCancel &&
             (confirmCancel ? (
               <div className="callout alert">

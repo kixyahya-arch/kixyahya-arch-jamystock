@@ -43,6 +43,7 @@ import { PublicTrackingController } from './flux/tracking.controller.js';
 import { TrackingService } from './flux/tracking.service.js';
 import { GeocoderService } from './flux/geocoder.service.js';
 import { EmailTemplatesController } from './notifications/email-templates.controller.js';
+import { RepriseController } from './reprise/reprise.controller.js';
 
 /** Monolithe modulaire (§7.1) : un module Nest par domaine métier au fil des phases. */
 @Module({})
@@ -50,7 +51,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },

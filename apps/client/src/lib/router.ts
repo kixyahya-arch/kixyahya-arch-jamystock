@@ -8,6 +8,7 @@ export type Route =
   | { name: 'commandes' }
   | { name: 'commande'; id: string }
   | { name: 'collecte' }
+  | { name: 'sites' }
   | { name: 'documents' }
   | { name: 'compte' }
   | { name: 'utilisateurs' }
@@ -27,6 +28,7 @@ export function parse(hash: string): Route {
   if (a === 'commandes') return { name: 'commandes' };
   if (a === 'panier') return { name: 'panier' };
   if (a === 'collecte') return { name: 'collecte' };
+  if (a === 'sites') return { name: 'sites' };
   if (a === 'documents') return { name: 'documents' };
   return { name: 'inventaire' };
 }

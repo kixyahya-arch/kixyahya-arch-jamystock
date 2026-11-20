@@ -62,6 +62,9 @@ export interface MissionDetail {
     creneau: string | null;
     /** LIV-05 : le client autorise le dépôt si personne n'est là */
     depotSansSignature?: boolean;
+    /** Collecte d'objets déjà connus : RETOUR au dépôt ou TRANSFERT vers un autre site client */
+    natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
+    destination?: { libelle?: string; lat?: number; lng?: number } | null;
   } | null;
   lignes: MissionLine[];
   /** WMS-05 : emplacements à compter (comptage en aveugle : le stock attendu n'est pas transmis) */

@@ -9,6 +9,7 @@ import { ArticleView } from './screens/ArticleView';
 import { CartView } from './screens/CartView';
 import { OrderView, Orders } from './screens/Orders';
 import { Collection } from './screens/Collection';
+import { OnSite } from './screens/OnSite';
 import { Documents } from './screens/Documents';
 import { Invitation } from './screens/Invitation';
 import { Users } from './screens/Users';
@@ -79,6 +80,8 @@ export function App() {
         <OrderView id={route.id} role={role} />
       ) : route.name === 'collecte' ? (
         <Collection ctx={ctx} role={role} />
+      ) : route.name === 'sites' ? (
+        <OnSite ctx={ctx} role={role} />
       ) : route.name === 'documents' ? (
         <Documents key={window.location.hash} ctx={ctx} role={role} />
       ) : route.name === 'compte' ? (

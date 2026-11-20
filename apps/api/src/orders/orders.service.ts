@@ -35,6 +35,9 @@ export interface OrderRow {
   date_confirmee: string | null;
   creneau_confirme: string | null;
   depot_sans_signature: boolean;
+  nature_collecte: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
+  destination: { libelle?: string } | null;
+  destination_projet_id: string | null;
   historique_statuts: { statut: OrderStatus; le: string; par: string }[];
 }
 
@@ -59,6 +62,9 @@ export interface CollectionInput {
   description: string;
   volumeEstimeM3?: number;
   lignes?: { description: string; quantite?: number }[];
+  nature?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
+  articleIds?: string[];
+  destination?: { projetId?: string; adresse: Record<string, unknown> };
 }
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
@@ -301,21 +307,35 @@ export class OrdersService {
       }
       const earliest = earliestDeliveryDate(now);
       if (input.dateSouhaitee < earliest) throw unprocessable('DELAI_MINIMUM', `Date trop proche : première date possible le ${earliest}`);
+      const nature = input.nature ?? 'NOUVEAUX';
+      const known = nature === 'NOUVEAUX' ? [] : await this.knownArticles(tx, user, input.articleIds ?? []);
+      const dest = nature === 'TRANSFERT' ? input.destination?.projetId : undefined;
+      if (dest) {
+        if (user.role === 'B2B_USER') await this.assertProjectAccess(tx, user, dest, false);
+        const pr = await tx.query('SELECT 1 FROM projet WHERE id = $1 AND entreprise_id = $2', [dest, user.entrepriseId]);
+        if (!pr.rowCount) throw notFound('Projet de destination');
+      }
       const id = uuidv7();
       const year = now.getUTCFullYear();
       const seq = (await tx.query<{ n: number }>('SELECT prochain_numero($1, $2, $3) AS n', [user.tenantId, 'CMD', year])).rows[0]!.n;
       await tx.query(
         `INSERT INTO commande (id, tenant_id, numero, entreprise_id, projet_id, demandeur_id, type, statut, adresse, contraintes_acces,
-                               contact_site, date_souhaitee, creneau_souhaite, description_collecte, volume_m3, created_by, historique_statuts)
+                               contact_site, date_souhaitee, creneau_souhaite, description_collecte, volume_m3, created_by, historique_statuts,
+                               nature_collecte, destination, destination_projet_id)
          VALUES ($1,$2,$3,$4,$5,$6,'COLLECTE','BROUILLON',$7,$8,$9,$10,$11,$12,$13,$6,
-                 jsonb_build_array(jsonb_build_object('statut','BROUILLON','le',now(),'par',$14::text)))`,
+                 jsonb_build_array(jsonb_build_object('statut','BROUILLON','le',now(),'par',$14::text)), $15, $16, $17)`,
         [
           id, user.tenantId, formatDocumentNumber('CMD', year, seq), user.entrepriseId, input.projetId ?? null, user.id,
           JSON.stringify(input.adresse), JSON.stringify(input.contraintesAcces ?? {}),
           input.contactSite ? JSON.stringify(input.contactSite) : null, input.dateSouhaitee, input.creneau ?? null,
-          input.description, input.volumeEstimeM3 ?? null, user.id,
+          input.description, input.volumeEstimeM3 ?? null, user.id, nature,
+          nature === 'TRANSFERT' && input.destination ? JSON.stringify(input.destination.adresse) : null,
+          nature === 'TRANSFERT' ? (input.destination?.projetId ?? null) : null,
         ],
       );
+      for (const a of known) {
+        await tx.query('INSERT INTO ligne_commande (id, tenant_id, commande_id, article_id) VALUES ($1,$2,$3,$4)', [uuidv7(), user.tenantId, id, a.id]);
+      }
       for (const l of input.lignes ?? []) {
         await tx.query(
           'INSERT INTO ligne_commande (id, tenant_id, commande_id, description_libre, quantite_estimee) VALUES ($1,$2,$3,$4,$5)',
@@ -328,6 +348,22 @@ export class OrdersService {
       await this.notify(tx, user, order, needsApproval ? 'VALIDATION_REQUISE' : 'COMMANDE_SOUMISE');
       return this.present(tx, await this.load(tx, id));
     });
+  }
+
+  /** Objets installés chez le client (RESTITUE), visibles par l'utilisateur et libres de toute autre commande. */
+  private async knownArticles(tx: Tx, user: AuthUser, ids: string[]) {
+    const uniq = [...new Set(ids)];
+    const r = await tx.query<{ id: string; libelle: string; statut: string; engage: boolean }>(
+      `SELECT a.id, a.libelle, a.statut, EXISTS (SELECT 1 FROM ligne_commande l WHERE l.article_id = a.id AND l.active) AS engage
+         FROM article a WHERE a.id = ANY($1::uuid[]) AND a.entreprise_id = $2`,
+      [uniq, user.entrepriseId],
+    );
+    if (r.rows.length !== uniq.length) throw notFound('Objet');
+    const bad = r.rows.find((a) => a.statut !== 'RESTITUE');
+    if (bad) throw unprocessable('PAS_CHEZ_LE_CLIENT', `« ${bad.libelle} » n’est pas sur un de vos sites`);
+    const busy = r.rows.find((a) => a.engage);
+    if (busy) throw conflict('ARTICLE_ENGAGE', `« ${busy.libelle} » est déjà dans une autre demande`);
+    return r.rows;
   }
 
   // ---------------------------------------------------------------- validation interne B2B (CMD-05)
@@ -600,6 +636,9 @@ export class OrdersService {
       adresse: c.adresse,
       contactSite: c.contact_site,
       depotSansSignature: c.depot_sans_signature,
+      natureCollecte: c.nature_collecte,
+      destination: c.destination,
+      destinationProjetId: c.destination_projet_id,
       historique: c.historique_statuts,
       nbArticles: lignes.rows.length,
       volumeM3: vol,
