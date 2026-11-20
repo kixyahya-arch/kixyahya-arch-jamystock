@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
 import { isIP } from 'node:net';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { clientKey, generateQrCode, isValidSiret, normalizeCode, normalizeSiret, parseRepriseArticles, parseRepriseClients, uuidv7 } from '@jamystock/domain';
 import type { RepriseArticleRow, RepriseIssue } from '@jamystock/domain';
@@ -421,7 +422,12 @@ export class RepriseController {
     );
     let ok = 0;
     let echecs = 0;
-    for (const p of todo.rows) {
+    // 5 téléchargements à la fois : l'ancien hébergeur répond vite, c'est la réduction des images qui coûte
+    const queue = [...todo.rows];
+    const worker = async () => {
+      for (let p = queue.shift(); p; p = queue.shift()) await handle(p);
+    };
+    const handle = async (p: { id: string; article_id: string; url: string; essais: number }) => {
       const res = await this.download(p.url);
       await this.db.tx(ctxOf(user), async (tx) => {
         if ('error' in res) {
@@ -445,7 +451,8 @@ export class RepriseController {
         await tx.query(`UPDATE reprise_photo SET statut = 'TELECHARGEE', photo_id = $2, erreur = NULL, essais = essais + 1 WHERE id = $1`, [p.id, photoId]);
         ok++;
       });
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(5, queue.length) }, worker));
     const restant = (
       await this.db.tx(ctxOf(user), (tx) => tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM reprise_photo WHERE statut = 'A_TELECHARGER'`))
     ).rows[0]!.n;
@@ -470,7 +477,7 @@ export class RepriseController {
       const data = Buffer.from(await res.arrayBuffer());
       if (data.length > 15 * 1024 * 1024) return { error: 'image de plus de 15 Mo', definitive: true };
       if (!data.length) return { error: 'fichier vide', definitive: true };
-      return { data, mime, ext };
+      return await compactPhoto(data, mime, ext);
     } catch (e) {
       return { error: e instanceof Error ? e.message.slice(0, 200) : 'téléchargement impossible', definitive: false };
     }
@@ -520,4 +527,22 @@ export function isPrivateHost(host: string): boolean {
   }
   if (isIP(h) === 6) return h === '::1' || h === '::' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h.startsWith('::ffff:');
   return false;
+}
+
+/**
+ * Les photos de l'ancien logiciel sortent du téléphone en pleine résolution (12 Mpx et plus, 3 à 5 Mo) : elles sont
+ * redressées et ramenées à 2 000 px de côté en WebP, soit environ 10 fois moins de disque et un affichage rapide.
+ * Une image que sharp ne sait pas lire est gardée telle quelle.
+ */
+export async function compactPhoto(data: Buffer, mime: string, ext: string): Promise<{ data: Buffer; mime: string; ext: string }> {
+  try {
+    const out = await sharp(data, { failOn: 'none' })
+      .rotate()
+      .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    return out.length < data.length ? { data: out, mime: 'image/webp', ext: 'webp' } : { data, mime, ext };
+  } catch {
+    return { data, mime, ext };
+  }
 }
