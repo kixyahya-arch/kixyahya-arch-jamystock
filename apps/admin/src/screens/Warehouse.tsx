@@ -79,7 +79,7 @@ const num = (v: string) =>
 const plural = (n: number, one: string, many = `${one}s`) =>
   `${n.toLocaleString("fr-FR")} ${n > 1 ? many : one}`;
 
-export function DepotTabs({ active }: { active: "depots" | "stock" }) {
+export function DepotTabs({ active }: { active: "depots" | "stock" | "inventaires" }) {
   return (
     <nav className="subnav" aria-label="Dépôt">
       <a
@@ -93,6 +93,12 @@ export function DepotTabs({ active }: { active: "depots" | "stock" }) {
         aria-current={active === "stock" ? "page" : undefined}
       >
         Stock et corrections
+      </a>
+      <a
+        href={href({ name: "inventaires" })}
+        aria-current={active === "inventaires" ? "page" : undefined}
+      >
+        Inventaires tournants
       </a>
     </nav>
   );
@@ -476,13 +482,18 @@ export function DepotView({ id }: { id: string }) {
           <h1>{depot.nom}</h1>
           <p className="lead">{depot.adresse ?? "Adresse à compléter"}</p>
         </div>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setEditing((x) => !x)}
-        >
-          {editing ? "Fermer" : "Modifier"}
-        </button>
+        <div className="row-actions">
+          <a className="btn primary" href={href({ name: "plan-depot", id })}>
+            Plan d’occupation
+          </a>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setEditing((x) => !x)}
+          >
+            {editing ? "Fermer" : "Modifier"}
+          </button>
+        </div>
       </section>
       {editing && (
         <DepotForm

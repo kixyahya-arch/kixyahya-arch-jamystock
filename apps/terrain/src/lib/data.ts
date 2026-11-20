@@ -23,6 +23,8 @@ export interface MissionSummary {
   creneau: string | null;
   /** mission « Photo » : bien concerné */
   articleLibelle?: string | null;
+  /** WMS-05 : zone d'un inventaire tournant */
+  zone?: string | null;
 }
 
 export interface MissionLine {
@@ -59,6 +61,13 @@ export interface MissionDetail {
     depotSansSignature?: boolean;
   } | null;
   lignes: MissionLine[];
+  /** WMS-05 : emplacements à compter (comptage en aveugle : le stock attendu n'est pas transmis) */
+  comptage?: {
+    numero: string | null;
+    zone: string | null;
+    partie: number;
+    emplacements: { id: string; code: string; chemin: string; qrCode: string; compte: boolean; trouves: number }[];
+  } | null;
   /** INV-07 : bien à photographier et demande du client (missions « Photo ») */
   demande?: {
     type: 'PHOTO' | 'CONSTAT';

@@ -383,7 +383,9 @@ async function missionsWhere(tx: Tx, where: string, params: unknown[]) {
               c.statut AS "statutCommande", e.nom AS client, c.adresse->>'libelle' AS adresse, coalesce(c.creneau_confirme, c.creneau_souhaite) AS creneau,
               c.volume_m3 AS "volumeM3", c.poids_kg AS "poidsKg", c.vehicule_suggere AS "vehiculeSuggere",
               (SELECT count(*)::int FROM ligne_commande l WHERE l.commande_id = c.id) AS "nbLignes",
-              m.donnees->>'demande' AS demande, m.donnees->>'message' AS "demandeMessage", pa.id AS "articleId", coalesce(pa.nom_client, pa.libelle) AS "articleLibelle"
+              m.donnees->>'demande' AS demande, m.donnees->>'message' AS "demandeMessage", pa.id AS "articleId", coalesce(pa.nom_client, pa.libelle) AS "articleLibelle",
+              m.donnees->>'inventaireId' AS "inventaireId", m.donnees->>'numero' AS "inventaireNumero", m.donnees->>'zone' AS "inventaireZone",
+              (m.donnees->>'emplacements')::int AS "inventaireEmplacements"
          FROM mission m LEFT JOIN commande c ON c.id = m.commande_id
          -- INV-07 : une mission « Photo » n'a pas de commande, le bien et le client sont dans ses données
          LEFT JOIN article pa ON m.type = 'PHOTO' AND pa.id = (m.donnees->>'articleId')::uuid

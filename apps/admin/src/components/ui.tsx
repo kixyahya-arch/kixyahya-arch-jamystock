@@ -10,7 +10,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'planning' }, label: 'Planning', active: route.name === 'planning' },
     { r: { name: 'clients' }, label: 'Clients', active: route.name === 'clients' || route.name === 'client' || route.name === 'nouveau-client' },
     ...(session.user?.role === 'SUPER_ADMIN'
-      ? [{ r: { name: 'depots' } as Route, label: 'Dépôts', active: ['depots', 'depot'].includes(route.name) }]
+      ? [{ r: { name: 'depots' } as Route, label: 'Dépôts', active: ['depots', 'depot', 'plan-depot', 'inventaires', 'inventaire'].includes(route.name) }]
       : []),
     { r: { name: 'stock' }, label: 'Stock', active: route.name === 'stock' || route.name === 'article' },
     { r: { name: 'litiges' }, label: 'Litiges', active: route.name === 'litiges' },

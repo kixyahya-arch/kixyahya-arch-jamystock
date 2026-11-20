@@ -802,3 +802,82 @@ span.check {
   background: var(--ink);
   color: var(--lime);
 }
+
+/* Lot 4 : inventaire tournant, emplacement suggéré, duplication à la réception */
+.count-card {
+  display: grid;
+  gap: 10px;
+}
+.scan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.scan-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+}
+.pick.current {
+  border: 2px solid var(--ink);
+  box-shadow: inset 6px 0 0 var(--lime);
+}
+.suggest {
+  margin-bottom: 12px;
+}
+.suggest .list {
+  counter-reset: s;
+}
+.suggest-item {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.suggest-item strong {
+  font-size: 1.15rem;
+}
+.suggest-item small {
+  color: var(--muted);
+}
+.suggest-item.best {
+  border: 2px solid var(--ink);
+  box-shadow: inset 6px 0 0 var(--lime);
+}
+.dup-offer,
+.series {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+.dup-offer p {
+  margin: 0;
+}
+.dup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.dup-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dup-row input {
+  width: 4.5em;
+  min-height: 44px;
+  font-size: 1.1rem;
+  text-align: center;
+}

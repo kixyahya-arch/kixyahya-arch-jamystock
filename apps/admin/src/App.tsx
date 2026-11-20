@@ -13,6 +13,7 @@ import { StockArticle } from './screens/StockArticle';
 import { DepotView, Depots } from './screens/Warehouse';
 import { Emails } from './screens/Emails';
 import { Disputes } from './screens/Disputes';
+import { DepotPlan, Inventories, InventoryView } from './screens/WarehousePlan';
 import { InvoiceView, Invoices } from './screens/Billing';
 import { Pricing, Surfaces } from './screens/Pricing';
 import { Banner, Shell } from './components/ui';
@@ -90,6 +91,12 @@ export function App() {
         <Surfaces ctx={ctx} client={route.client} />
       ) : route.name === 'pilotage' ? (
         isAdmin ? <Pilotage /> : <Banner kind="info">Le tableau de bord de pilotage est réservé au Super Admin.</Banner>
+      ) : route.name === 'plan-depot' ? (
+        isAdmin ? <DepotPlan id={route.id} /> : <Banner kind="info">Le plan du dépôt est réservé au Super Admin.</Banner>
+      ) : route.name === 'inventaires' ? (
+        isAdmin ? <Inventories /> : <Banner kind="info">Les inventaires sont réservés au Super Admin.</Banner>
+      ) : route.name === 'inventaire' ? (
+        isAdmin ? <InventoryView id={route.id} /> : <Banner kind="info">Les inventaires sont réservés au Super Admin.</Banner>
       ) : route.name === 'litiges' ? (
         <Disputes isAdmin={isAdmin} />
       ) : route.name === 'emails' ? (

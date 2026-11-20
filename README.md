@@ -139,6 +139,10 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | GET | `/api/v1/field/receptions`, `/field/missions/:id` | terrain | REC-01, PRP-01 |
 | POST | `/api/v1/field/sync` | terrain | §7.5 (toutes les actions ci-dessous) |
 | PUT | `/api/v1/field/photos/:id` | terrain | REC-02, §7.6 |
+| GET | `/api/v1/field/locations/suggest?commandeId&articleId&longueurM&largeurM&hauteurM&empilable` | Opérateur | REC-06 |
+| POST | `/api/v1/field/articles/:id/duplicate` (1 à 50 copies), `/bo/warehouse/labels/articles` | Opérateur | REC-05 |
+| GET | `/api/v1/bo/warehouse/depots/:id/plan`, `/bo/warehouse/zones/:id/contents?emplacement` | Super Admin | WMS-04 |
+| GET / POST | `/api/v1/bo/inventaires?statut`, `/bo/inventaires/:id`, POST `/bo/inventaires/:id/ecarts/:ecartId`, `/bo/inventaires/:id/annuler` | Super Admin | WMS-05 |
 
 ### App terrain : file d'actions hors-ligne
 
@@ -162,6 +166,7 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `PICKUP_SIGN` (BL d'enlèvement, articles ATTENDU) | Chauffeur | LIV-06 |
 | `RETURN` (article refusé de retour au dépôt) | Opérateur | §4.3 |
 | `PHOTO_REQUEST_DONE` (bien scanné, 1 à 6 photos, état constaté, réponse au client) | Opérateur | INV-07 |
+| `LOCATION_COUNT` (inventaire en aveugle : emplacement scanné, puis tout ce qui s'y trouve ; recompte possible) | Opérateur | WMS-05 |
 
 ### App terrain (PWA)
 
@@ -245,6 +250,21 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
     manquant, erreur) avec les biens concernés et jusqu'à 6 photos. Le litige est lié au BL ; le Back-Office le prend en
     charge, le résout ou le rejette avec une réponse envoyée au client. Le Super Admin peut accorder un geste commercial,
     déduit de la prochaine facture.
+- **H. Entrepôt** (fait) :
+  - Plan du dépôt (WMS-04) : depuis la fiche d'un dépôt, chaque zone est une carte colorée selon son remplissage
+    (libre, partiel, plein à 90 %, indisponible), avec sa jauge m² et le nombre de biens et de clients. En ouvrant une
+    zone, on voit la grille de ses emplacements et, au clic, les clients, projets et biens qui s'y trouvent.
+  - Inventaire tournant (WMS-05) : le Super Admin lance le comptage d'une zone, découpé en missions de 30 emplacements
+    (réglable) et affectées ou non à un opérateur. Sur le terminal, l'opérateur scanne l'emplacement puis tout ce qu'il
+    contient, sans voir ce qui est attendu. Les écarts (manquant, déplacé, inconnu) remontent au Back-Office : on
+    corrige la position, on déclare le bien perdu ou on ignore, toujours avec un motif tracé. La campagne se clôt
+    quand plus rien n'est à arbitrer ; une seule campagne ouverte par zone.
+  - Duplication à la réception (REC-05) : après avoir rangé un bien, l'opérateur tape « Encore 7 comme celui-ci ».
+    Les copies reprennent la photo, la catégorie et les dimensions ; il imprime leurs étiquettes (Zebra ou planche A4),
+    les colle et range toute la série d'un seul scan d'emplacement.
+  - Emplacement suggéré (REC-06) : au moment de ranger, le terminal propose les 3 emplacements libres les plus logiques
+    (même projet déjà là, même allée, zone dédiée au client, place suffisante), avec la raison et la surface libre.
+    Hors réseau, l'opérateur range où il y a de la place.
 
 ### Variables d'environnement des services externes
 

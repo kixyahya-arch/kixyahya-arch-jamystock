@@ -2272,3 +2272,213 @@ details.more summary,
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* ——— Lot 4 : plan du dépôt (WMS-04), inventaires tournants (WMS-05) ——— */
+.mcard.t-inventaire {
+  border-top-color: var(--ink);
+}
+:root {
+  --fill-libre: #eaf6ee;
+  --fill-libre-line: #1d6b3a;
+  --fill-partiel: #f4ffb0;
+  --fill-partiel-line: #8a9a00;
+  --fill-plein: #f8e9e7;
+  --fill-plein-line: #7e2b24;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fill-libre: #0f2a19;
+    --fill-libre-line: #7fdc9f;
+    --fill-partiel: #2b3000;
+    --fill-partiel-line: #e5ff31;
+    --fill-plein: #3a1411;
+    --fill-plein-line: #ff9b8f;
+  }
+}
+.fill-LIBRE {
+  background: var(--fill-libre);
+  border-color: var(--fill-libre-line);
+}
+.fill-PARTIEL {
+  background: var(--fill-partiel);
+  border-color: var(--fill-partiel-line);
+}
+.fill-PLEIN {
+  background: var(--fill-plein);
+  border-color: var(--fill-plein-line);
+}
+.fill-INDISPONIBLE {
+  background: repeating-linear-gradient(135deg, var(--muted-bg) 0 6px, var(--surface) 6px 12px);
+  border-color: var(--line);
+  color: var(--muted);
+}
+.plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 12px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.plan-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-legend .swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid;
+}
+.zone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+.zone-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 16px;
+  border: 1.5px solid;
+  border-radius: var(--radius);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.zone-card.selected {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+.zone-card small {
+  color: var(--muted);
+}
+.zone-card.fill-PARTIEL small,
+.zone-card.fill-LIBRE small,
+.zone-card.fill-PLEIN small {
+  color: var(--ink);
+  opacity: 0.75;
+}
+.zone-rate {
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+  line-height: 1;
+}
+.meter {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  overflow: hidden;
+}
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ink);
+}
+.zone-inv {
+  justify-self: start;
+  padding: 2px 10px;
+  border-radius: var(--pill);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.plan-detail .panel-head {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.loc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+.loc {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border: 1.5px solid;
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.loc small {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+.loc.selected {
+  outline: 3px solid var(--ink);
+  outline-offset: 1px;
+}
+.client-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.launch-form {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.launch-form label {
+  display: grid;
+  gap: 4px;
+}
+.ecart-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.ecart {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.ecart.t-MANQUANT {
+  border-left-color: var(--danger);
+}
+.ecart.t-DEPLACE {
+  border-left-color: var(--fill-partiel-line);
+}
+.ecart.done {
+  border-left-color: var(--line);
+}
+.ecart-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ecart .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ecarts-done,
+.comptages {
+  margin-top: 16px;
+}
+.ecarts-done summary,
+.comptages summary {
+  cursor: pointer;
+  font-weight: 600;
+}

@@ -95,6 +95,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return parse<T>(res);
 }
 
+/** Fichier (PDF d'étiquettes) : même authentification, réponse binaire. */
+export async function apiBlob(path: string, body: unknown): Promise<Blob> {
+  const init: RequestInit = { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } };
+  let res = await raw(path, init, current?.accessToken);
+  if (res.status === 401 && (await refresh())) res = await raw(path, init, current?.accessToken);
+  if (!res.ok) await parse(res);
+  return res.blob();
+}
+
 export async function login(email: string, password: string, mfaCode?: string): Promise<Session> {
   const res = await raw('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, mfaCode, deviceId: deviceId() }) });
   const t = await parse<Session>(res);
