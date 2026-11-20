@@ -108,7 +108,7 @@ export class FieldController {
     const q = z
       .object({
         articleId: uuid.optional(), commandeId: uuid.optional(), entrepriseId: uuid.optional(), projetId: uuid.optional(),
-        longueurM: num, largeurM: num, hauteurM: num, empilable: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+        longueurM: num, largeurM: num, hauteurM: num, nombre: z.coerce.number().int().min(1).max(51).optional(), empilable: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
       })
       .parse(query);
     return this.field.suggestLocations(user, q);

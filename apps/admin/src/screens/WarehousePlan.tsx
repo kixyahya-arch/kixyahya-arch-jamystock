@@ -446,6 +446,13 @@ export function InventoryView({ id }: { id: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const load = useCallback(() => get<InvDetail>(`/bo/inventaires/${id}`).then(setD, (e) => setError((e as Error).message)), [id]);
   useEffect(() => void load(), [load]);
+  // pendant le comptage, les écarts arrivent au fil des terminaux
+  const running = d?.statut === 'EN_COURS';
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => void load(), 30_000);
+    return () => clearInterval(t);
+  }, [running, load]);
   if (!d) return error ? <Banner kind="error">{error}</Banner> : <p className="hint">Chargement…</p>;
   const comptes = d.comptages.filter((c) => c.compteLe).length;
   const open = d.ecarts.filter((x) => !x.decision);

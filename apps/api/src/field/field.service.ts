@@ -470,7 +470,7 @@ export class FieldService {
    */
   async suggestLocations(
     user: AuthUser,
-    q: { articleId?: string; commandeId?: string; entrepriseId?: string; projetId?: string | null; longueurM?: number; largeurM?: number; hauteurM?: number; empilable?: boolean },
+    q: { articleId?: string; commandeId?: string; entrepriseId?: string; projetId?: string | null; longueurM?: number; largeurM?: number; hauteurM?: number; nombre?: number; empilable?: boolean },
   ) {
     return this.db.tx(ctxOf(user), async (tx) => {
       const a = q.articleId
@@ -484,7 +484,8 @@ export class FieldService {
       const l = a?.longueur_m ?? q.longueurM ?? null;
       const w = a?.largeur_m ?? q.largeurM ?? null;
       const h = a?.hauteur_m ?? q.hauteurM ?? null;
-      const need = l != null && w != null ? l * w * ((a?.empilable ?? q.empilable) ? 0.5 : 1) : 0;
+      // une série (REC-05) se range d'un seul scan : il faut la place pour toutes les copies
+      const need = l != null && w != null ? l * w * ((a?.empilable ?? q.empilable) ? 0.5 : 1) * (q.nombre ?? 1) : 0;
       const rows = (
         await tx.query<{
           id: string; code: string; chemin: string; qr_code: string; surface_m2: number; hauteur_m: number | null; dedie: boolean;

@@ -88,7 +88,7 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
     <Screen title={`Réception ${reception.numero}`} onBack={onBack}>
       <p className="hint">
         {reception.client}
-        {reception.projet ? ` · ${reception.projet}` : ''} · {done.length} traité(s) sur {reception.nbArticles} annoncé(s)
+        {reception.projet ? ` · ${reception.projet}` : ''} · {reception.nbArticles} annoncé(s) · {done.length} traité(s)
       </p>
       {message && <Banner kind={message.kind}>{message.text}</Banner>}
 
@@ -183,6 +183,7 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
 
       {step.s === 'series' && (
         <SeriesFlow
+          commandeId={reception.commandeId}
           libelle={step.libelle}
           articles={step.articles}
           locationName={locationName}
@@ -420,15 +421,16 @@ interface Suggestion {
 }
 
 /** REC-06 : les 3 emplacements libres les plus logiques (même projet, même allée, place suffisante). */
-function Suggestions({ commandeId, dims }: { commandeId: string; dims: Dims }) {
+function Suggestions({ commandeId, articleId, dims = {}, nombre }: { commandeId: string; articleId?: string; dims?: Dims; nombre?: number }) {
   const [state, setState] = useState<{ list?: Suggestion[]; offline?: boolean }>({});
   useEffect(() => {
-    const q = new URLSearchParams({ commandeId });
+    const q = new URLSearchParams(articleId ? { articleId } : { commandeId });
     for (const [k, v] of Object.entries(dims)) if (v) q.set(k, String(v));
+    if (nombre && nombre > 1) q.set('nombre', String(nombre));
     api<{ suggestions: Suggestion[] }>(`/field/locations/suggest?${q}`)
       .then((r) => setState({ list: r.suggestions }))
       .catch((e) => setState({ list: [], offline: e instanceof NetworkError }));
-  }, [commandeId, dims]);
+  }, [commandeId, articleId, dims, nombre]);
   if (state.offline) return <p className="hint">Hors réseau : pas de suggestion d’emplacement, rangez où il y a de la place.</p>;
   if (!state.list) return <p className="hint">Recherche d’un emplacement…</p>;
   if (!state.list.length) return <p className="hint">Aucun emplacement libre assez grand : voyez avec le chef de quai.</p>;
@@ -501,12 +503,14 @@ function DuplicateOffer({
 
 /** Série de copies : imprimer leurs étiquettes, les coller, puis ranger toute la série d'un scan d'emplacement. */
 function SeriesFlow({
+  commandeId,
   libelle,
   articles,
   locationName,
   onDone,
   onCancel,
 }: {
+  commandeId: string;
   libelle: string;
   articles: { id: string; qrCode: string }[];
   locationName: (qr: string) => string;
@@ -551,6 +555,7 @@ function SeriesFlow({
           </li>
         ))}
       </ul>
+      <Suggestions commandeId={commandeId} articleId={articles[0]?.id} nombre={articles.length} />
       <Scanner
         expect={['E']}
         label="Scannez l'emplacement de la série"

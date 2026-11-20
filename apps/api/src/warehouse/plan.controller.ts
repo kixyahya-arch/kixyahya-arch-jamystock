@@ -299,8 +299,29 @@ export class InventoryCountController {
       const allowed: Record<EcartRow['type'], string[]> = { MANQUANT: ['PERDU', 'IGNORE'], DEPLACE: ['CORRIGE', 'IGNORE'], INCONNU: ['IGNORE'] };
       if (!allowed[x.type].includes(b.decision)) throw unprocessable('DECISION', `Décision impossible pour un écart « ${x.type.toLowerCase()} »`);
 
+      // le même bien manque à un emplacement et a été trouvé à un autre : c'est un déplacement, pas une perte
+      const ailleurs = x.article_id
+        ? (
+            await tx.query<{ id: string; code: string }>(
+              `SELECT x.id, e.code FROM inventaire_ecart x JOIN emplacement e ON e.id = x.emplacement_id
+                WHERE x.inventaire_id = $1 AND x.article_id = $2 AND x.id <> $3 AND x.decision IS NULL AND x.type = $4`,
+              [inv.id, x.article_id, x.id, x.type === 'MANQUANT' ? 'DEPLACE' : 'MANQUANT'],
+            )
+          ).rows
+        : [];
+      if (x.type === 'MANQUANT' && b.decision === 'PERDU' && ailleurs.length) {
+        throw conflict('TROUVE_AILLEURS', `Ce bien a été trouvé en ${ailleurs[0]!.code} : corrigez plutôt l’écart « trouvé ailleurs »`);
+      }
       if (b.decision !== 'IGNORE') await this.apply(tx, user, inv.numero, x, b.decision, b.motif);
       await tx.query('UPDATE inventaire_ecart SET decision = $2, motif = $3, decide_par = $4, decide_le = now() WHERE id = $1', [x.id, b.decision, b.motif, user.id]);
+      if (x.type === 'DEPLACE' && b.decision === 'CORRIGE' && ailleurs.length) {
+        // le manquant correspondant est réglé par la même correction
+        const code = (await tx.query<{ code: string }>('SELECT code FROM emplacement WHERE id = $1', [x.emplacement_id])).rows[0]!.code;
+        await tx.query(
+          `UPDATE inventaire_ecart SET decision = 'CORRIGE', motif = $2, decide_par = $3, decide_le = now() WHERE id = ANY($1::uuid[])`,
+          [ailleurs.map((r) => r.id), `Retrouvé en ${code} lors du même inventaire`, user.id],
+        );
+      }
       const left = (await tx.query<{ n: number }>('SELECT count(*)::int AS n FROM inventaire_ecart WHERE inventaire_id = $1 AND decision IS NULL', [inv.id])).rows[0]!.n;
       let statut = inv.statut;
       if (!left && inv.statut === 'A_ARBITRER') {

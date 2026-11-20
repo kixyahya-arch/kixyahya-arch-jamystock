@@ -2421,9 +2421,15 @@ details.more summary,
   outline-offset: 1px;
 }
 .client-list li {
-  display: flex;
+  flex-wrap: nowrap;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.client-list li > span.mono {
+  flex: 0 0 auto;
+  font-weight: 600;
 }
 .launch-form {
   display: grid;

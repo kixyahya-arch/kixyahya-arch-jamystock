@@ -82,6 +82,11 @@ describe('suggestion d’emplacement (REC-06)', () => {
     expect(chaise.body.suggestions[0]).toMatchObject({ raison: 'Le même projet est déjà rangé ici' });
     expect(chaise.body.suggestions[0].code).toMatch(/^N-B-04-/);
 
+    // une série de 12 chaises (REC-05) rangée d'un seul scan : il faut la place pour toutes, plus de case de rack
+    const serie = await get(op, `/field/locations/suggest?entrepriseId=${t.data.entreprises.promoteur}&projetId=${t.data.projets.tilleuls}&longueurM=0.5&largeurM=0.5&empilable=true&nombre=12`);
+    expect(serie.body.besoinM2).toBe(1.5);
+    expect(serie.body.suggestions.every((s: { code: string; libreM2: number }) => !s.code.startsWith('N-B-04-') && s.libreM2 >= 1.5)).toBe(true);
+
     // un bureau (1,28 m²) ne tient pas dans une case de rack de 1,2 m²
     const bureau = await get(op, `/field/locations/suggest?entrepriseId=${t.data.entreprises.promoteur}&projetId=${t.data.projets.tilleuls}&longueurM=1.6&largeurM=0.8`);
     expect(bureau.body.suggestions.every((s: { code: string }) => s.code.startsWith('N-B-S'))).toBe(true);
@@ -230,13 +235,15 @@ describe('inventaire tournant (WMS-05)', () => {
     expect(mv.rows[0]!.motif).toMatch(/^Inventaire INV-.* : manquant déclaré perdu : Introuvable/);
 
     const in103 = (await loc('N-B-04-103')).id;
+    // la chaise 5 manque en 201 mais a été trouvée en 103 : la déclarer perdue est refusé
+    const lost = await decide(find('MANQUANT', 'N-B-04-201'), 'PERDU');
+    expect(lost.status).toBe(409);
+    expect(lost.body.error.code).toBe('TROUVE_AILLEURS');
     expect((await decide(find('DEPLACE', 'N-B-04-103'), 'CORRIGE')).status).toBe(201);
     expect((await locOf(chaises()[4]!)).emplacement_courant_id).toBe(in103);
-    // la chaise 5 a été corrigée : son « manquant » en 201 n'est plus d'actualité
-    const r = await decide(find('MANQUANT', 'N-B-04-201'), 'PERDU');
-    expect(r.status).toBe(409);
-    expect(r.body.error.code).toBe('STOCK_A_CHANGE');
-    expect((await decide(find('MANQUANT', 'N-B-04-201'), 'IGNORE', 'Chaise retrouvée en 103')).status).toBe(201);
+    // la même correction règle son « manquant » en 201
+    const paired = (await get(admin, `/bo/inventaires/${invId}`)).body.ecarts.find((x: { id: string }) => x.id === find('MANQUANT', 'N-B-04-201'));
+    expect(paired).toMatchObject({ decision: 'CORRIGE', motif: 'Retrouvé en N-B-04-103 lors du même inventaire' });
     const last = await decide(find('INCONNU', 'N-B-04-103'), 'IGNORE', 'Étiquette d’un autre dépôt');
     expect(last.body).toMatchObject({ restants: 0, statut: 'CLOS' });
     expect((await decide(find('INCONNU', 'N-B-04-103'), 'IGNORE')).status).toBe(409);
