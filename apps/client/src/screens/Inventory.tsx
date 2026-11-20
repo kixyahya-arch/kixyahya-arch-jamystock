@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { get } from '../lib/api';
+import { apiBlob, get, getSession, post, saveBlob } from '../lib/api';
 import { addToCart, useCarts } from '../lib/cart';
-import { href } from '../lib/router';
-import { ARTICLE_STATUS, CONDITION, type Article, type Ctx, type Page, type Surface } from '../lib/types';
+import { hashParam, href } from '../lib/router';
+import { ARTICLE_STATUS, CONDITION, type Article, type Ctx, type InventoryExport, type Page, type Surface } from '../lib/types';
 import { Banner, Pills, StatusPill, Thumb } from '../components/ui';
 import { Gauge } from '../components/Gauge';
 
@@ -10,13 +10,14 @@ interface Filters {
   projet: string;
   q: string;
   categorie: string;
+  categorieClient: string;
   depot: string;
   etat: string;
   statut: string;
   entreDu: string;
   entreAu: string;
 }
-const EMPTY: Filters = { projet: '', q: '', categorie: '', depot: '', etat: '', statut: '', entreDu: '', entreAu: '' };
+const EMPTY: Filters = { projet: '', q: '', categorie: '', categorieClient: '', depot: '', etat: '', statut: '', entreDu: '', entreAu: '' };
 
 /** INV-01 à INV-04 : grille de vignettes, filtres, recherche, regroupement par projet, jauge m². */
 export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
@@ -28,6 +29,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { inCart } = useCarts();
+  const [clientCats, setClientCats] = useState<{ nom: string; n: number }[]>([]);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -38,6 +40,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
 
   useEffect(() => {
     void get<Surface>('/me/surface').then(setSurface).catch(() => undefined);
+    void get<{ items: { nom: string; n: number }[] }>('/me/inventory/categories').then((r) => setClientCats(r.items), () => undefined);
   }, []);
 
   useEffect(() => {
@@ -101,6 +104,19 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
                 ))}
               </select>
             </label>
+            {clientCats.length > 0 && (
+              <label>
+                Ma catégorie
+                <select value={f.categorieClient} onChange={set('categorieClient')}>
+                  <option value="">Toutes</option>
+                  {clientCats.map((c) => (
+                    <option key={c.nom} value={c.nom}>
+                      {c.nom} ({c.n})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {ctx.depots.length > 1 && (
               <label>
                 Dépôt
@@ -150,6 +166,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
           </div>
         </details>
         <span className="count-label">{page ? `${page.total} bien${page.total > 1 ? 's' : ''}` : ''}</span>
+        <Exports filters={f} disabled={!page?.total} />
       </div>
 
       {error && <Banner kind="error">{error}</Banner>}
@@ -168,7 +185,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
                 <span className="card-body">
                   <span className="card-title">{a.nomClient || a.libelle}</span>
                   <span className="card-meta">
-                    {[a.categorie, projectName(a.projetId)].filter(Boolean).join(' · ')}
+                    {[a.referenceInterne, a.categorieClient ?? a.categorie, projectName(a.projetId)].filter(Boolean).join(' · ')}
                   </span>
                 </span>
               </a>
@@ -205,5 +222,104 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
         </a>
       </section>
     </>
+  );
+}
+
+const filterBody = (f: Filters) => Object.fromEntries(Object.entries(f).filter(([k, v]) => v && k !== 'depot'));
+
+/** INV-05 : export de la vue courante, en CSV immédiat ou en PDF illustré préparé en tâche de fond. */
+function Exports({ filters, disabled }: { filters: Filters; disabled: boolean }) {
+  const [open, setOpen] = useState(hashParam('exports') === '1');
+  const [list, setList] = useState<InventoryExport[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const readOnly = !!getSession()?.support;
+
+  const load = () => get<{ items: InventoryExport[] }>('/me/inventory/exports').then((r) => setList(r.items), () => setList([]));
+  useEffect(() => {
+    if (open) void load();
+  }, [open]);
+  // tant qu'un PDF se prépare, on regarde toutes les 2 secondes
+  const running = list?.some((x) => x.statut === 'EN_COURS');
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => void load(), 2000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  const csv = async () => {
+    setBusy('csv');
+    setError(null);
+    try {
+      const p = new URLSearchParams(filterBody(filters) as Record<string, string>);
+      saveBlob(await apiBlob(`/me/inventory/export.csv?${p}`), `inventaire-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const pdf = async () => {
+    setBusy('pdf');
+    setError(null);
+    try {
+      await post('/me/inventory/exports', filterBody(filters));
+      setOpen(true);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const download = async (x: InventoryExport) => {
+    setBusy(x.id);
+    try {
+      saveBlob(await apiBlob(`/me/inventory/exports/${x.id}/file`), `inventaire-${x.creeLe.slice(0, 10)}.pdf`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <details className="filters exports" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="btn secondary small">Exporter</summary>
+      <div className="filters-grid export-panel">
+        <p className="hint small">L’export reprend les biens affichés, avec vos filtres et votre recherche.</p>
+        <div className="row-actions">
+          <button type="button" className="btn small" disabled={disabled || !!busy} onClick={() => void csv()}>
+            {busy === 'csv' ? 'Préparation…' : 'Tableur (CSV)'}
+          </button>
+          <button type="button" className="btn primary small" disabled={disabled || !!busy || readOnly || running} onClick={() => void pdf()}>
+            {busy === 'pdf' ? 'Lancement…' : 'PDF avec photos'}
+          </button>
+        </div>
+        {error && <Banner kind="error">{error}</Banner>}
+        {!!list?.length && (
+          <ul className="export-list">
+            {list.map((x) => (
+              <li key={x.id}>
+                <span>
+                  PDF du {new Date(x.creeLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                  {x.nbArticles != null && ` · ${x.nbArticles} bien${x.nbArticles > 1 ? 's' : ''}`}
+                </span>
+                {x.statut === 'PRET' ? (
+                  <button type="button" className="btn small" disabled={!!busy} onClick={() => void download(x)}>
+                    {busy === x.id ? '…' : 'Télécharger'}
+                  </button>
+                ) : x.statut === 'EN_COURS' ? (
+                  <StatusPill label="En préparation…" />
+                ) : (
+                  <StatusPill label="Échec, relancez" tone="alert" />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {running && <p className="hint small">Vous pouvez quitter la page : un e-mail vous prévient quand le PDF est prêt. Il reste disponible 7 jours.</p>}
+      </div>
+    </details>
   );
 }

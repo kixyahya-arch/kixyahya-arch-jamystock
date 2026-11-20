@@ -10,6 +10,8 @@ export interface Article {
   qrCode: string;
   libelle: string;
   nomClient: string | null;
+  referenceInterne: string | null;
+  categorieClient: string | null;
   statut: string;
   etat: string;
   projetId: string | null;
@@ -40,6 +42,9 @@ export interface ArticleDetail extends Record<string, unknown> {
   id: string;
   libelle: string;
   nom_client: string | null;
+  reference_interne: string | null;
+  categorie_client: string | null;
+  note_client: string | null;
   description: string | null;
   qr_code: string;
   statut: string;
@@ -177,3 +182,48 @@ export const EDITABLE = ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'SOUMISE'];
 export const euros = (cents: number) => (cents / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 export const dateFr = (iso: string | null | undefined) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+
+/** INV-07 : demande de photo ou de constat sur un bien. */
+export interface ArticleRequest {
+  id: string;
+  statut: 'A_AFFECTER' | 'AFFECTEE' | 'EN_COURS' | 'TERMINEE';
+  demande: 'PHOTO' | 'CONSTAT';
+  message: string;
+  demandeeLe: string;
+  traiteeLe: string | null;
+  commentaire: string | null;
+}
+
+/** INV-05 : export PDF préparé en tâche de fond. */
+export interface InventoryExport {
+  id: string;
+  statut: 'EN_COURS' | 'PRET' | 'ECHEC';
+  nbArticles: number | null;
+  creeLe: string;
+  pretLe: string | null;
+  expireLe: string;
+}
+
+/** ADM-02 : estimation de la prochaine facture. */
+export interface BillingEstimate {
+  mois: string;
+  calculeLe: string;
+  emissionPrevue: string;
+  surfaceActuelle: number;
+  factures: {
+    periodeDebut: string;
+    periodeFin: string;
+    m2Inclus: number;
+    modeSurface: string;
+    m2Factures: number;
+    joursReleves: number;
+    joursProjetes: number;
+    lignes: { type: string; libelle: string; quantite: number; unite: string; prixUnitaireHtCents: number; totalHtCents: number }[];
+    totalHtCents: number;
+    tvaCents: number;
+    totalTtcCents: number;
+  }[];
+  totalHtCents: number;
+  tvaCents: number;
+  totalTtcCents: number;
+}

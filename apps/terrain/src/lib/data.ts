@@ -21,6 +21,8 @@ export interface MissionSummary {
   contraintesAcces: Record<string, unknown> | null;
   contactSite: { nom: string; telephone: string } | null;
   creneau: string | null;
+  /** mission « Photo » : bien concerné */
+  articleLibelle?: string | null;
 }
 
 export interface MissionLine {
@@ -52,6 +54,12 @@ export interface MissionDetail {
     creneau: string | null;
   } | null;
   lignes: MissionLine[];
+  /** INV-07 : bien à photographier et demande du client (missions « Photo ») */
+  demande?: {
+    type: 'PHOTO' | 'CONSTAT';
+    message: string | null;
+    article: { id: string; qrCode: string; libelle: string; nomClient: string | null; etat: string; chemin: string | null; client: string | null; vignette: string | null };
+  } | null;
 }
 
 export interface Reception {

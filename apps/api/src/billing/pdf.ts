@@ -393,3 +393,93 @@ function drawSignature(page: PDFPage, svg: string | null, box: { x: number; y: n
     }
   }
 }
+
+// ===========================================================================================================
+// INV-05 : inventaire illustré
+// ===========================================================================================================
+
+export interface InventoryPdfData {
+  emetteur: string;
+  client: string;
+  filtres: string[];
+  genereLe: Date;
+  articles: {
+    qrCode: string;
+    libelle: string;
+    nomClient: string | null;
+    referenceInterne: string | null;
+    categorie: string | null;
+    projet: string | null;
+    etat: string;
+    statut: string;
+    dimensions: string | null;
+    dateEntree: string | null;
+    note: string | null;
+    /** vignette déjà convertie en JPEG (pdf-lib ne lit ni le WebP ni l'AVIF) */
+    vignette: Buffer | null;
+  }[];
+}
+
+/** Liste illustrée des biens, une ligne par bien avec sa vignette : à transmettre à un assureur ou à une direction. */
+export async function inventoryPdf(d: InventoryPdfData): Promise<Buffer> {
+  const w = await open(`Inventaire ${d.client}`, `${d.emetteur} · inventaire ${d.client} · ${dateFr(d.genereLe)}`);
+  const right = A4[0] - M;
+  w.page.drawRectangle({ x: M, y: w.y - 4, width: 18, height: 18, color: ACCENT });
+  w.text(d.emetteur, M + 26, w.y, { size: 15, font: w.bold });
+  w.text('INVENTAIRE', right, w.y, { size: 13, font: w.bold, align: 'right' });
+  w.y -= 26;
+  w.text(d.client, M, w.y, { size: 12, font: w.bold });
+  w.y -= 15;
+  w.para(
+    `${d.articles.length} bien${d.articles.length > 1 ? 's' : ''} au ${dateFr(d.genereLe)} à ${d.genereLe.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}${d.filtres.length ? ` · ${d.filtres.join(' · ')}` : ''}`,
+    { size: 9, color: MUTED, gap: 8 },
+  );
+  w.rule();
+  w.y -= 8;
+
+  const THUMB = 64;
+  const textX = M + THUMB + 14;
+  const textW = right - textX - 120;
+  for (const a of d.articles) {
+    const title = a.nomClient ? `${a.nomClient}` : a.libelle;
+    const sub = [a.nomClient ? `Libellé dépôt : ${a.libelle}` : null, a.referenceInterne ? `Réf. ${a.referenceInterne}` : null, a.categorie, a.projet].filter(Boolean).join(' · ');
+    const titleLines = w.wrap(title, textW, 10.5, w.bold).slice(0, 2);
+    const subLines = sub ? w.wrap(sub, textW, 8.5).slice(0, 2) : [];
+    const noteLines = a.note ? w.wrap(`Note : ${a.note}`, textW, 8.5).slice(0, 2) : [];
+    const h = Math.max(THUMB, titleLines.length * 13 + subLines.length * 11 + noteLines.length * 11 + 4) + 12;
+    w.ensure(h);
+    const top = w.y;
+    if (a.vignette) {
+      try {
+        const img = await w.doc.embedJpg(a.vignette);
+        w.page.drawImage(img, { x: M, y: top - THUMB, width: THUMB, height: THUMB });
+      } catch {
+        w.page.drawRectangle({ x: M, y: top - THUMB, width: THUMB, height: THUMB, color: LINE });
+      }
+    } else {
+      w.page.drawRectangle({ x: M, y: top - THUMB, width: THUMB, height: THUMB, color: LINE });
+      w.text('sans photo', M + 8, top - THUMB / 2 - 3, { size: 7, color: MUTED });
+    }
+    let y = top - 10;
+    for (const l of titleLines) {
+      w.text(l, textX, y, { size: 10.5, font: w.bold });
+      y -= 13;
+    }
+    for (const l of subLines) {
+      w.text(l, textX, y, { size: 8.5, color: MUTED });
+      y -= 11;
+    }
+    for (const l of noteLines) {
+      w.text(l, textX, y, { size: 8.5 });
+      y -= 11;
+    }
+    w.text(a.qrCode, right, top - 10, { size: 8.5, font: w.bold, align: 'right' });
+    w.text(`${a.etat} · ${a.statut}`, right, top - 22, { size: 8.5, color: MUTED, align: 'right' });
+    if (a.dimensions) w.text(a.dimensions, right, top - 34, { size: 8.5, color: MUTED, align: 'right' });
+    if (a.dateEntree) w.text(`Entré le ${dateFr(a.dateEntree)}`, right, top - 46, { size: 8.5, color: MUTED, align: 'right' });
+    w.y = top - h + 6;
+    w.rule(w.y + 2);
+    w.y -= 6;
+  }
+  return save(w, d.genereLe);
+}

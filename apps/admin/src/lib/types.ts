@@ -58,6 +58,11 @@ export interface Mission {
   poidsKg: number | null;
   vehiculeSuggere: string | null;
   nbLignes: number;
+  /** INV-07 : mission « Photo » demandée par le client */
+  demande?: 'PHOTO' | 'CONSTAT' | null;
+  demandeMessage?: string | null;
+  articleId?: string | null;
+  articleLibelle?: string | null;
 }
 
 export interface OrderDetail extends Omit<OrderRow, 'urgent' | 'missionsAAffecter' | 'nbLignes' | 'adresse'> {

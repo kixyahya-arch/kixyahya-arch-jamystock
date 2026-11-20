@@ -174,6 +174,15 @@ function MissionCard({
       {late && <span className="kwarn">En retard : prévue le {dateFr(m.debutPrevu)}</span>}
       <span>{m.client}</span>
       {m.typeCommande !== 'RETRAIT' && m.type !== 'PREPARATION' && m.adresse && <span className="muted">{m.adresse}</span>}
+      {m.type === 'PHOTO' && m.articleId && (
+        <span className="photo-req">
+          <a href={href({ name: 'article', id: m.articleId })}>{m.articleLibelle}</a>
+          <small>
+            {m.demande === 'CONSTAT' ? 'Constat d’état' : 'Photo supplémentaire'}
+            {m.demandeMessage ? ` : « ${m.demandeMessage} »` : ''}
+          </small>
+        </span>
+      )}
       <span className="muted">
         {m.numero && (
           <a href={href({ name: 'demande', id: m.commandeId! })} className="mono">

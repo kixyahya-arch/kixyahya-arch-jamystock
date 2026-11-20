@@ -11,6 +11,7 @@ import { ctxOf } from '../common/context.js';
 import { BusinessError, forbidden, unprocessable } from '../common/errors.js';
 import { PaymentsService } from './payments.service.js';
 import { verifyWebhook } from './stripe.js';
+import { BillingService } from '../billing/billing.service.js';
 
 const BillingBody = z.object({
   adresseFacturation: z.string().trim().max(300).nullable().optional(),
@@ -31,6 +32,7 @@ export class PaymentsController {
     @Inject(CONFIG) private readonly config: AppConfig,
     @Inject(DATABASE) private readonly db: Database,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
+    @Inject(BillingService) private readonly billing: BillingService,
   ) {}
 
   /** Le titulaire du compte (B2B Admin ou particulier) gère la facturation ; un utilisateur B2B n'y a pas accès. */
@@ -63,6 +65,14 @@ export class PaymentsController {
         virement: org?.parametres?.facturation?.iban ? { titulaire: org.raison_sociale, iban: org.parametres.facturation.iban, bic: org.parametres.facturation.bic ?? null } : null,
       };
     });
+  }
+
+  /** ADM-02 : estimation de la prochaine facture (mois en cours), recalculée à chaque consultation sur les relevés de la nuit. */
+  @Get('me/billing/estimate')
+  @RequirePermission('billing.read')
+  estimate(@CurrentUser() user: AuthUser) {
+    this.holder(user);
+    return this.db.tx(ctxOf(user), (tx) => this.billing.estimate(tx, user.entrepriseId!, new Date()));
   }
 
   @Put('me/billing')

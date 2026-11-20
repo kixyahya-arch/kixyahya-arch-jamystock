@@ -17,7 +17,7 @@ export interface TemplateContext {
 type Vars = Record<string, unknown>;
 
 /** Messages transactionnels : envoyés quelles que soient les préférences de l'utilisateur (§6.3). */
-export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU', 'RELANCE_IMPAYE']);
+export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU', 'RELANCE_IMPAYE', 'EXPORT_PRET', 'PHOTO_PRETE']);
 
 /** Événements réglables par l'utilisateur dans « Mon compte ». */
 export const OPTIONAL_EVENTS: { modele: string; libelle: string }[] = [
@@ -120,6 +120,23 @@ function spec(modele: string, v: Vars): Spec | null {
         action: { label: 'Régler la facture', path: '#/documents' },
       };
     }
+    case 'EXPORT_PRET':
+      return {
+        subject: 'Votre inventaire illustré est prêt',
+        lines: [`L’export PDF de votre inventaire (${v.nbArticles ?? 0} bien${Number(v.nbArticles) > 1 ? 's' : ''}) est prêt. Il reste téléchargeable 7 jours depuis votre Espace Client.`],
+        action: { label: 'Télécharger l’inventaire', path: '#/?exports=1' },
+      };
+    case 'PHOTO_PRETE':
+      return {
+        subject: v.demande === 'CONSTAT' ? `Constat effectué : ${v.libelle ?? 'votre bien'}` : `Nouvelle photo : ${v.libelle ?? 'votre bien'}`,
+        lines: [
+          v.demande === 'CONSTAT'
+            ? `Nous avons examiné « ${v.libelle} » comme demandé. Les photos et notre constat sont sur sa fiche.`
+            : `Les photos demandées de « ${v.libelle} » sont disponibles sur sa fiche.`,
+          v.commentaire ? `Commentaire de l’opérateur : ${v.commentaire}` : '',
+        ].filter(Boolean),
+        action: { label: 'Voir le bien', path: `#/article/${v.articleId}` },
+      };
     case 'PAIEMENT_RECU':
       return { subject: `Paiement reçu : facture ${v.numero}`, lines: [`Nous avons bien reçu votre paiement de ${euros(v.montantCents)} pour la facture ${v.numero}. Merci.`], action: { label: 'Mes documents', path: '#/documents' } };
     default:

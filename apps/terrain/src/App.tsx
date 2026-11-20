@@ -7,6 +7,7 @@ import { Home } from './screens/Home';
 import { ReceptionFlow, Receptions, Transfer } from './screens/Reception';
 import { Picking } from './screens/Picking';
 import { Delivery, Pickup } from './screens/Delivery';
+import { PhotoRequest } from './screens/PhotoRequest';
 import { Banner, Screen } from './components/ui';
 
 export type Route =
@@ -54,6 +55,8 @@ export function App() {
             return <Delivery missionId={route.id} onBack={home} />;
           case 'COLLECTE':
             return <Pickup missionId={route.id} onBack={home} />;
+          case 'PHOTO':
+            return <PhotoRequest missionId={route.id} onBack={home} />;
           default:
             return (
               <Screen title="Mission" onBack={home}>

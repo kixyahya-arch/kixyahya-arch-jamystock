@@ -66,7 +66,9 @@ export type FieldAction =
   | { type: 'ARRIVE'; payload: { missionId: string; gps?: GpsFix } }
   | { type: 'BL_SIGN'; payload: BlSignPayload }
   | { type: 'PICKUP_SIGN'; payload: PickupSignPayload }
-  | { type: 'RETURN'; payload: { articleQr: string; locationQr?: string; motif?: string } };
+  | { type: 'RETURN'; payload: { articleQr: string; locationQr?: string; motif?: string } }
+  /** INV-07 : photo ou constat demandé par le client, pris sur le bien scanné */
+  | { type: 'PHOTO_REQUEST_DONE'; payload: { missionId: string; articleQr: string; photoIds: string[]; etat?: 'NEUF' | 'BON' | 'USE' | 'ENDOMMAGE'; commentaire?: string } };
 
 export type FieldActionType = FieldAction['type'];
 

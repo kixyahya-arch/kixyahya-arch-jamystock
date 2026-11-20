@@ -382,8 +382,12 @@ async function missionsWhere(tx: Tx, where: string, params: unknown[]) {
               m.vehicule_id AS "vehiculeId", v.immatriculation AS vehicule, c.id AS "commandeId", c.numero, c.type AS "typeCommande",
               c.statut AS "statutCommande", e.nom AS client, c.adresse->>'libelle' AS adresse, coalesce(c.creneau_confirme, c.creneau_souhaite) AS creneau,
               c.volume_m3 AS "volumeM3", c.poids_kg AS "poidsKg", c.vehicule_suggere AS "vehiculeSuggere",
-              (SELECT count(*)::int FROM ligne_commande l WHERE l.commande_id = c.id) AS "nbLignes"
-         FROM mission m LEFT JOIN commande c ON c.id = m.commande_id LEFT JOIN entreprise e ON e.id = c.entreprise_id
+              (SELECT count(*)::int FROM ligne_commande l WHERE l.commande_id = c.id) AS "nbLignes",
+              m.donnees->>'demande' AS demande, m.donnees->>'message' AS "demandeMessage", pa.id AS "articleId", coalesce(pa.nom_client, pa.libelle) AS "articleLibelle"
+         FROM mission m LEFT JOIN commande c ON c.id = m.commande_id
+         -- INV-07 : une mission « Photo » n'a pas de commande, le bien et le client sont dans ses données
+         LEFT JOIN article pa ON m.type = 'PHOTO' AND pa.id = (m.donnees->>'articleId')::uuid
+         LEFT JOIN entreprise e ON e.id = coalesce(c.entreprise_id, pa.entreprise_id)
          LEFT JOIN utilisateur u ON u.id = m.assigne_a LEFT JOIN vehicule v ON v.id = m.vehicule_id
         WHERE ${where}
         ORDER BY m.debut_prevu, m.ordre NULLS LAST, m.type`,
