@@ -152,7 +152,7 @@ export function Pricing({ ctx }: { ctx: BoContext }) {
                     {g.valideAu ? ` jusqu’au ${dateFr(g.valideAu)}` : ''}
                   </div>
                 </div>
-                <StatusPill label={g.utilisee ? 'Utilisée' : 'Modifiable'} tone={g.utilisee ? 'dark' : 'lime'} />
+                <StatusPill label={g.utilisee ? 'Utilisée' : 'Modifiable'} tone={g.utilisee ? 'dark' : 'accent'} />
               </header>
               <dl className="facts">
                 <dt>Prix au m²</dt>
@@ -193,7 +193,7 @@ function ForfaitRow({ f, today, onAvenant }: { f: Forfait; today: string; onAven
   return (
     <tr>
       <td>
-        <strong>{f.client}</strong> {f.dateDebut > today && <StatusPill label="À venir" tone="lime" />}
+        <strong>{f.client}</strong> {f.dateDebut > today && <StatusPill label="À venir" tone="accent" />}
         <div className="muted">
           v{f.version} · grille {f.grille} v{f.grilleVersion}
           {f.modeSurface === 'PIC' ? ' · pic du mois' : ''}

@@ -190,7 +190,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
                 </span>
               </a>
               <div className="card-foot">
-                <StatusPill label={a.engage && a.statut === 'EN_STOCK' ? 'Dans une commande' : (ARTICLE_STATUS[a.statut] ?? a.statut)} tone={a.statut === 'EN_STOCK' && !a.engage ? 'neutral' : 'dark'} />
+                <StatusPill label={a.engage && a.statut === 'EN_STOCK' ? 'Dans une commande' : (ARTICLE_STATUS[a.statut] ?? a.statut)} tone={a.statut === 'EN_STOCK' && !a.engage ? 'dark' : a.engage ? 'accent' : 'neutral'} />
                 {canOrder && available && (
                   <button
                     type="button"

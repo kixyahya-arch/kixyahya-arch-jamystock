@@ -135,7 +135,7 @@ export function FleetMap() {
                 </div>
                 {c.enCours ? (
                   <div className="fleet-current">
-                    <StatusPill label={c.enCours.etape === 'ARRIVE' ? 'Sur place' : 'En route'} tone={c.enCours.etape === 'ARRIVE' ? 'dark' : 'lime'} />
+                    <StatusPill label={c.enCours.etape === 'ARRIVE' ? 'Sur place' : 'En route'} tone={c.enCours.etape === 'ARRIVE' ? 'ok' : 'route'} />
                     <span>
                       <strong>{c.enCours.client}</strong> · {c.enCours.numero}
                       <small>{c.enCours.adresse}</small>

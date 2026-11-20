@@ -3,7 +3,7 @@ import { apiBlob, get, openPdf, post, put } from '../lib/api';
 import { go, href } from '../lib/router';
 import type { BoContext } from '../lib/types';
 import { AUDIT_ACTION, INVOICE_STATUS, LINE_TYPE, SNAPSHOT_SOURCE, dateFr, dateShort, euros, m2, monthFr, parseEuros, previousMonth } from '../lib/labels';
-import { Banner, Pills, StatusPill, Tile } from '../components/ui';
+import { Banner, Pills, StatusPill, type Tone, Tile } from '../components/ui';
 
 /** Écrans de facturation du Super Admin (FAC-01 à FAC-04) : factures, avoirs, tarifs, surfaces quotidiennes. */
 
@@ -43,10 +43,11 @@ interface BillingSummary {
   today: string;
 }
 
-export function invoiceTone(r: Pick<InvoiceRow, 'statut' | 'bloquee' | 'enRetard'>): 'neutral' | 'lime' | 'dark' | 'alert' {
-  if (r.statut === 'BROUILLON') return r.bloquee ? 'alert' : 'lime';
+export function invoiceTone(r: Pick<InvoiceRow, 'statut' | 'bloquee' | 'enRetard'>): Tone {
+  if (r.statut === 'BROUILLON') return r.bloquee ? 'alert' : 'accent';
   if (r.enRetard || r.statut === 'EN_RETARD') return 'alert';
   if (r.statut === 'EMISE') return 'dark';
+  if (r.statut === 'PAYEE') return 'ok';
   return 'neutral';
 }
 const statusLabel = (r: Pick<InvoiceRow, 'statut' | 'bloquee' | 'enRetard'>) =>

@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { drawBrandSymbol } from '../common/brand-pdf.js';
 import { averySlots, type AveryFormat, type LabelContent, type ZebraFormatId, ZEBRA_FORMATS } from '@jamystock/domain';
 
 /**
@@ -80,10 +81,17 @@ function drawQr(page: PDFPage, data: string, x: number, yTop: number, size: numb
 function drawLabel(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont }, l: LabelContent, box: { x: number; y: number; w: number; h: number }) {
   const pad = Math.min(box.w, box.h) * 0.07;
   const qrSize = Math.min(box.h - 2 * pad, box.w * 0.4);
-  const top = box.y + box.h - pad;
+  let top = box.y + box.h - pad;
   drawQr(page, l.qr, box.x + pad, box.y + box.h / 2 + qrSize / 2, qrSize);
   const tx = box.x + pad + qrSize + pad * 0.8;
   const tw = box.x + box.w - pad - tx;
+  // charte (§09) : symbole + « JAMYSTOCK » en tête quand l'étiquette est assez haute, toujours en noir sur blanc
+  if (box.h >= 70 && tw >= 70) {
+    const bs = Math.min(9, box.h * 0.085);
+    const sw = drawBrandSymbol(page, tx, top, bs * 1.3, { pin: INK, cube: rgb(1, 1, 1) });
+    page.drawText('JAMYSTOCK', { x: tx + sw + bs * 0.4, y: top - bs * 1.05, size: bs, font: fonts.bold, color: INK });
+    top -= bs * 1.9;
+  }
   // le code est l'information principale : on réduit la police jusqu'à ce qu'il tienne en entier plutôt que de le tronquer
   const maxTitle = Math.max(6, Math.min(box.h * 0.2, 18));
   const titleWidth = fonts.bold.widthOfTextAtSize(safe(fonts.bold, l.titre), maxTitle);
@@ -92,7 +100,7 @@ function drawLabel(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont }, l:
   const depotSize = Math.max(4.5, Math.min(maxTitle * 0.48, 8));
   page.drawText(fit(fonts.bold, l.titre, titleSize, tw), { x: tx, y: top - titleSize * 0.85, size: titleSize, font: fonts.bold, color: INK });
   let y = top - titleSize * 0.85 - subSize * 1.5;
-  const maxSubLines = Math.max(1, Math.floor((box.h - 2 * pad - titleSize - depotSize * 2) / (subSize * 1.2)));
+  const maxSubLines = Math.max(1, Math.floor((top - box.y - pad - titleSize - depotSize * 2) / (subSize * 1.2)));
   if (l.sousTitre) {
     for (const line of wrap(fonts.regular, l.sousTitre, subSize, tw, Math.min(3, maxSubLines))) {
       page.drawText(line, { x: tx, y, size: subSize, font: fonts.regular, color: INK });

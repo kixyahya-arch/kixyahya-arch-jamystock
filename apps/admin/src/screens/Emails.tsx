@@ -198,7 +198,7 @@ export function Emails() {
                   <td>
                     <StatusPill
                       label={m.statut === 'ENVOYEE' && m.fournisseur === 'JOURNAL' ? 'Préparé' : STATUT[m.statut]}
-                      tone={m.statut === 'ECHEC' ? 'alert' : m.statut === 'EN_ATTENTE' ? 'lime' : m.statut === 'IGNOREE' ? 'dark' : 'neutral'}
+                      tone={m.statut === 'ECHEC' ? 'alert' : m.statut === 'EN_ATTENTE' ? 'accent' : m.statut === 'IGNOREE' ? 'dark' : 'neutral'}
                     />
                   </td>
                   <td>

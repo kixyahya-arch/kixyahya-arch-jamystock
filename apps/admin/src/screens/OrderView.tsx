@@ -174,7 +174,7 @@ export function OrderView({ id }: { id: string }) {
                   <li key={m.id}>
                     <div className="mission-head">
                       <strong>{MISSION_TYPE[m.type] ?? m.type}</strong>
-                      <StatusPill label={MISSION_STATUS[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'lime' : 'neutral'} />
+                      <StatusPill label={MISSION_STATUS[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'accent' : 'neutral'} />
                     </div>
                     <span className="muted">
                       {dateShort(m.debutPrevu)} · {timeFr(m.debutPrevu)}

@@ -12,7 +12,7 @@ const PICTOS: Record<string, string> = {
   building: '<rect x="60" y="110" width="280" height="150" rx="6"/><rect x="88" y="140" width="60" height="44" rx="4" opacity=".5"/><rect x="170" y="140" width="60" height="44" rx="4" opacity=".5"/><rect x="262" y="170" width="46" height="90" rx="4" opacity=".5"/>',
   box: '<path d="M90 120 200 80l110 40v120l-110 40-110-40z"/><path d="M90 120l110 40 110-40M200 160v120" fill="none" stroke-width="10" opacity=".5"/>',
 };
-const TINTS = ['#f0f0f0', '#e5ff31', '#f3e3dc', '#e6ecf2', '#ece9df'];
+const TINTS = ['#eef2f6', '#e0f2fe', '#ecfbf4', '#e6ecf2', '#ece9df'];
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 

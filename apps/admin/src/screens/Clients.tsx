@@ -243,7 +243,7 @@ export function ClientView({ id }: { id: string }) {
                     </td>
                     <td>{ROLE[u.role] ?? u.role}</td>
                     <td>
-                      <StatusPill label={USER_STATUS[u.statut] ?? u.statut} tone={u.statut === 'INVITE' ? 'lime' : u.statut === 'DESACTIVE' ? 'alert' : 'neutral'} />
+                      <StatusPill label={USER_STATUS[u.statut] ?? u.statut} tone={u.statut === 'INVITE' ? 'accent' : u.statut === 'DESACTIVE' ? 'alert' : 'neutral'} />
                     </td>
                     <td className="muted">{u.derniereConnexion ? `Vu le ${dateFr(u.derniereConnexion)}` : 'Jamais connecté'}</td>
                     <td>

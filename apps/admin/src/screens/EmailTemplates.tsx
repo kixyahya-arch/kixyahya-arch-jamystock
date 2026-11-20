@@ -68,7 +68,7 @@ export function EmailTemplates() {
                   <td>
                     {r.personnalise ? (
                       <>
-                        <StatusPill label="Personnalisé" tone="lime" />
+                        <StatusPill label="Personnalisé" tone="accent" />
                         <div className="muted small">
                           {dateFr(r.modifieLe)}
                           {r.modifiePar ? ` · ${r.modifiePar}` : ''}

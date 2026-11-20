@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { acceptInvitation, ApiError, publicGet, type Session } from '../lib/api';
 import { Banner } from '../components/ui';
+import { BrandLogo } from '../components/Brand';
 
 /** ADM-03 : activation d'un accès à partir du lien reçu par e-mail (valable 7 jours, à usage unique). */
 export function Invitation({ token, onLogged }: { token: string; onLogged: (s: Session) => void }) {
@@ -22,7 +23,8 @@ export function Invitation({ token, onLogged }: { token: string; onLogged: (s: S
   return (
     <div className="login">
       <div className="login-brand">
-        <strong>jamystock</strong>
+        <h1 className="sr-only">JAMYSTOCK</h1>
+        <BrandLogo variant="blanc" size={64} />
         <span>{info ? `Bienvenue, ${info.nom}.` : 'Activez votre accès.'}</span>
       </div>
       {invalid ? (
