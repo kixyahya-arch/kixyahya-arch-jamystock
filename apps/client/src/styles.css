@@ -1949,3 +1949,8 @@ label.inline {
 .site-request {
   margin-top: 32px;
 }
+.site-filter {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 420px);
+}

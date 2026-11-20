@@ -368,6 +368,7 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
   // objets déjà connus (installés chez le client) : on les reprend avec leur étiquette d'origine
   const known = m.lignes.filter((l) => l.articleId && l.statutLigne === 'DEMANDEE');
   const taken = new Set(items.map((i) => i.articleId));
+  const knownIds = new Set(known.map((l) => l.articleId!));
   const take = (l: MissionLine) => {
     if (taken.has(l.articleId!)) return;
     setItems((x) => [...x, { articleId: l.articleId!, qr: l.qrCode ?? undefined, libelle: l.libelle ?? 'Objet', photos: [] }]);
@@ -383,7 +384,7 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
           <>
             <Banner kind="ok">✓ Enlèvement signé : {items.length} objet(s) chargé(s).</Banner>
             <section className="card">
-              <span className="hint">Site de destination</span>
+              <p className="hint">Site de destination</p>
               <strong>{dest?.libelle ?? '—'}</strong>
               <div className="row-actions">
                 <a className="btn secondary" href={navUrl(dest)} target="_blank" rel="noreferrer">
@@ -449,7 +450,7 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
     <Screen title={title} onBack={onBack}>
       <section className="card">
         <strong>{m.commande.adresse?.libelle}</strong>
-        {nature === 'TRANSFERT' && <span className="hint">Puis vers : {m.commande.destination?.libelle ?? '—'}</span>}
+        {nature === 'TRANSFERT' && <p className="hint">Puis vers : {m.commande.destination?.libelle ?? '—'}</p>}
         <div className="row-actions">
           <a className="btn secondary" href={navUrl(m.commande.adresse)} target="_blank" rel="noreferrer">
             Naviguer
@@ -507,9 +508,9 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
               <p className="hint small">Un objet introuvable sur place reste à reprendre : il sera signalé manquant à la signature.</p>
             </>
           )}
-          <h2>Biens enlevés ({items.length})</h2>
+          {nature !== 'TRANSFERT' && <h2>{known.length ? 'Autres biens enlevés' : 'Biens enlevés'} ({items.filter((i) => !knownIds.has(i.articleId)).length})</h2>}
           <ul className="list">
-            {items.map((i) => (
+            {items.filter((i) => !knownIds.has(i.articleId)).map((i) => (
               <li key={i.articleId} className="pick">
                 <img src={i.photos[0]?.url} alt="" />
                 <span className="row-main">

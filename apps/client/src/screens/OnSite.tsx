@@ -70,8 +70,24 @@ export function OnSite({ ctx, role }: { ctx: Ctx; role: string }) {
         <p className="lead">Les objets livrés et installés chez vous. Sélectionnez-en pour les faire revenir au dépôt ou les déplacer vers un autre site.</p>
       </section>
 
-      {groups.length > 1 && (
+      {groups.length > 1 && groups.length <= 6 && (
         <Pills label="Sites" value={site} onChange={setSite} options={[{ value: '', label: 'Tous les sites' }, ...groups.map((g) => ({ value: g.key, label: `${g.nom} (${g.list.length})` }))]} />
+      )}
+      {groups.length > 6 && (
+        <div className="toolbar">
+          <label className="site-filter">
+            Site
+            <select value={site} onChange={(e) => setSite(e.target.value)}>
+              <option value="">Tous les sites ({groups.length})</option>
+              {groups.map((g) => (
+                <option key={g.key} value={g.key}>
+                  {g.nom} ({g.list.length})
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="count-label">{items?.length ?? 0} objets sur vos sites</span>
+        </div>
       )}
 
       {error && <Banner kind="error">{error}</Banner>}
@@ -108,9 +124,15 @@ export function OnSite({ ctx, role }: { ctx: Ctx; role: string }) {
                   {a.engage ? (
                     <span className="status accent">Demande en cours</span>
                   ) : (
-                    <label className="checkbox">
-                      <input type="checkbox" checked={selected.has(a.id)} disabled={readOnly} onChange={() => toggle(a)} /> Sélectionner
-                    </label>
+                    <button
+                      type="button"
+                      className={`btn small ${selected.has(a.id) ? 'primary' : 'secondary'}`}
+                      aria-pressed={selected.has(a.id)}
+                      disabled={readOnly}
+                      onClick={() => toggle(a)}
+                    >
+                      {selected.has(a.id) ? 'Sélectionné ✓' : 'Sélectionner'}
+                    </button>
                   )}
                 </div>
               </li>
