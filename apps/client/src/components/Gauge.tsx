@@ -1,4 +1,6 @@
-import type { Surface } from '../lib/types';
+import { useState } from 'react';
+import { get } from '../lib/api';
+import type { Surface, SurfaceMonth } from '../lib/types';
 
 const fmt = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
@@ -12,7 +14,8 @@ export function Gauge({ s }: { s: Surface }) {
         <div>
           <span className="eyebrow">Surface occupée {s.perimetre === 'PROJETS' ? '· mes projets' : ''}</span>
           <p className="gauge-value">
-            {fmt(s.m2Occupes)} m²{s.m2Inclus !== null && <span> / {fmt(s.m2Inclus)} m² inclus</span>}
+            {s.m2Occupes === 0 && s.nbArticles > 0 && (s.sansDimensions ?? 0) + (s.nonRanges ?? 0) > 0 ? 'À mesurer' : `${fmt(s.m2Occupes)} m²`}
+            {s.m2Inclus !== null && <span> / {fmt(s.m2Inclus)} m² inclus</span>}
           </p>
         </div>
         <div className="gauge-side">
@@ -33,6 +36,29 @@ export function Gauge({ s }: { s: Surface }) {
           </p>
         </>
       )}
+      {((s.sansDimensions ?? 0) > 0 || (s.nonRanges ?? 0) > 0) && (
+        <p className="gauge-note">
+          {[
+            (s.sansDimensions ?? 0) > 0 && `${s.sansDimensions} bien${s.sansDimensions! > 1 ? 's' : ''} sans dimensions`,
+            (s.nonRanges ?? 0) > 0 && `${s.nonRanges} en cours de rangement`,
+          ]
+            .filter(Boolean)
+            .join(' et ')}{' '}
+          : leur surface sera comptée dès qu’ils auront été mesurés et rangés au dépôt.
+        </p>
+      )}
+      {(s.parDepot?.length ?? 0) > 1 && (
+        <ul className="by-project">
+          {s.parDepot!.map((d) => (
+            <li key={d.depotId}>
+              <span>{d.nom}</span>
+              <span>
+                {fmt(d.m2)} m² · {d.nbArticles} biens
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {s.parProjet.length > 1 && (
         <ul className="by-project">
           {s.parProjet.map((p) => (
@@ -45,6 +71,53 @@ export function Gauge({ s }: { s: Surface }) {
           ))}
         </ul>
       )}
+      <History inclus={s.m2Inclus} />
     </section>
+  );
+}
+
+const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+/** ADM-01 : courbe d'évolution sur 12 mois (moyenne mensuelle des m², repère du forfait), chargée à l'ouverture. */
+function History({ inclus }: { inclus: number | null }) {
+  const [rows, setRows] = useState<SurfaceMonth[] | null>(null);
+  const [error, setError] = useState(false);
+  const load = () => {
+    if (rows || error) return;
+    get<SurfaceMonth[]>('/me/surface/historique').then(setRows, () => setError(true));
+  };
+  const max = Math.max(inclus ?? 0, ...(rows ?? []).map((r) => r.pic ?? 0), 1);
+  const W = 360;
+  const H = 120;
+  const bw = W / 12;
+  const y = (v: number) => H - (v / max) * (H - 8);
+  return (
+    <details className="gauge-history" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && load()}>
+      <summary>Évolution sur 12 mois</summary>
+      {error && <p className="hint">Courbe indisponible pour le moment.</p>}
+      {!rows && !error && <p className="hint">Chargement…</p>}
+      {rows && rows.every((r) => r.moyenne === null) && <p className="hint">La courbe se remplit au fil des jours, à partir de votre premier mois de stockage.</p>}
+      {rows && rows.some((r) => r.moyenne !== null) && (
+        <svg viewBox={`0 0 ${W} ${H + 18}`} role="img" aria-label="Surface moyenne occupée par mois sur 12 mois">
+          {inclus !== null && <line className="quota" x1={0} x2={W} y1={y(inclus)} y2={y(inclus)} />}
+          {rows.map((r, i) => {
+            const m = Number(r.mois.slice(5, 7)) - 1;
+            return (
+              <g key={r.mois}>
+                {r.moyenne !== null && (
+                  <rect className={inclus !== null && r.moyenne > inclus ? 'over' : ''} x={i * bw + 3} width={bw - 6} y={y(r.moyenne)} height={H - y(r.moyenne)} rx={2}>
+                    <title>{`${MOIS[m]} ${r.mois.slice(0, 4)} : ${fmt(r.moyenne)} m² en moyenne, pic ${fmt(r.pic ?? r.moyenne)} m²`}</title>
+                  </rect>
+                )}
+                <text x={i * bw + bw / 2} y={H + 13} textAnchor="middle">
+                  {MOIS[m]}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      )}
+      {rows && inclus !== null && rows.some((r) => r.moyenne !== null) && <p className="hint">Trait pointillé : m² inclus dans votre forfait.</p>}
+    </details>
   );
 }

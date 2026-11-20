@@ -20,6 +20,8 @@ export interface AppConfig {
   stripe: { secretKey?: string; webhookSecret?: string; apiBase: string };
   /** SUI-02 : géocodage des adresses (Base Adresse Nationale) pour l'heure d'arrivée estimée ; actif en production. */
   geocoder: { mode: 'ban' | 'off'; baseUrl: string };
+  /** CLI-01 : vérification des SIRET (API Recherche d'entreprises, répertoire Sirene). */
+  sirene: { mode: 'on' | 'off'; baseUrl: string };
   /** FLX-05 : fond de carte du Back-Office et de la page de suivi (tuiles XYZ). */
   mapTilesUrl: string;
   /** Reprise de données : autorise le téléchargement de photos depuis une adresse locale ou privée (tests seulement). */
@@ -49,6 +51,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       worker: env.MAIL_WORKER ? env.MAIL_WORKER === 'on' : env.NODE_ENV === 'production' || env.RENDER === 'true',
     },
     stripe: { secretKey: env.STRIPE_SECRET_KEY || undefined, webhookSecret: env.STRIPE_WEBHOOK_SECRET || undefined, apiBase: env.STRIPE_API_BASE || 'https://api.stripe.com' },
+    sirene: {
+      mode: (env.SIRENE ? env.SIRENE : env.NODE_ENV === 'production' || env.RENDER === 'true' ? 'on' : 'off') === 'on' ? 'on' : 'off',
+      baseUrl: (env.SIRENE_URL || 'https://recherche-entreprises.api.gouv.fr').replace(/\/+$/, ''),
+    },
     geocoder: {
       mode: (env.GEOCODER ? env.GEOCODER : env.NODE_ENV === 'production' || env.RENDER === 'true' ? 'ban' : 'off') === 'ban' ? 'ban' : 'off',
       baseUrl: (env.GEOCODER_URL || 'https://api-adresse.data.gouv.fr').replace(/\/+$/, ''),
