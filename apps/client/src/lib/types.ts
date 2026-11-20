@@ -73,6 +73,10 @@ export interface Surface {
   niveau: 'OK' | 'ATTENTION' | 'DEPASSEMENT' | null;
   nbArticles: number;
   parProjet: { projetId: string; nom: string; nbArticles: number; m2: number }[];
+  parDepot?: { depotId: string; nom: string; nbArticles: number; m2: number }[];
+  /** Biens sans dimensions (souvent repris d'un ancien logiciel) ou pas encore rangés : surface à mesurer au dépôt. */
+  sansDimensions?: number;
+  nonRanges?: number;
   calculeLe: string;
 }
 
@@ -289,4 +293,23 @@ export interface Delivery {
     signalementPossible: boolean;
   } | null;
   litiges: Dispute[];
+}
+
+/** ADM-01 : un mois de la courbe d'évolution (moyenne et pic des instantanés quotidiens). */
+export interface SurfaceMonth {
+  mois: string;
+  moyenne: number | null;
+  pic: number | null;
+}
+
+/** INV-04 : un projet dans la vue « Projets ». */
+export interface ProjectCard {
+  id: string;
+  nom: string;
+  statut: string;
+  auDepot: number;
+  surSite: number;
+  m2: number;
+  derniereActivite: string | null;
+  couverture: string | null;
 }

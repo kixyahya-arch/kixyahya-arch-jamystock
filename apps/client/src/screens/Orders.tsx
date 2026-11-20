@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, get, getSession, post } from '../lib/api';
+import { api, get, getSession, listen, post } from '../lib/api';
 import { href } from '../lib/router';
 import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
 import { Banner, Pills, StatusPill, type Tone } from '../components/ui';
@@ -25,7 +25,11 @@ export function Orders({ ctx }: { ctx: Ctx }) {
   const [tab, setTab] = useState<'cours' | 'valider' | 'terminees'>('cours');
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    get<OrderSummary[]>('/orders').then(setOrders, (e) => setError((e as Error).message));
+    const load = () => get<OrderSummary[]>('/orders').then(setOrders, (e) => setError((e as Error).message));
+    // SUI-01 : la liste se met à jour d'elle-même quand une commande change de statut
+    const stop = listen('/orders-events', () => void load());
+    void load();
+    return stop;
   }, []);
 
   const toValidate = orders?.filter((o) => o.statut === 'EN_ATTENTE_VALIDATION') ?? [];
@@ -89,7 +93,11 @@ export function OrderView({ id, role }: { id: string; role: string }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = () => get<Order>(`/orders/${id}`).then(setO, (e) => setError((e as Error).message));
-  useEffect(() => void load(), [id]);
+  useEffect(() => {
+    void load();
+    // SUI-01 : la frise avance en direct, sans rechargement
+    return listen(`/orders/${id}/events`, () => void load());
+  }, [id]);
 
   const act = async (path: string, body: unknown = {}) => {
     setBusy(true);

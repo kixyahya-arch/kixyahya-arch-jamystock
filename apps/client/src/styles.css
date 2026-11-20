@@ -495,6 +495,38 @@ button {
 .gauge.over .bar span {
   background: var(--alert);
 }
+.gauge-history {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.gauge-history summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.gauge-history svg {
+  width: 100%;
+  height: auto;
+  margin-top: 8px;
+  display: block;
+}
+.gauge-history rect {
+  fill: var(--ink);
+  opacity: 0.85;
+}
+.gauge-history rect.over {
+  fill: var(--alert);
+}
+.gauge-history .quota {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.gauge-history text {
+  fill: var(--muted);
+  font-size: 9px;
+}
 .gauge-note {
   margin: 0;
   font-size: 0.9rem;
@@ -1960,4 +1992,38 @@ label.inline {
   display: grid;
   gap: 6px;
   min-width: min(100%, 420px);
+}
+
+/* INV-04 : bascule Biens / Projets */
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 8px 0 16px;
+  border-radius: var(--pill);
+  background: var(--muted-bg);
+}
+.view-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: var(--pill);
+  cursor: pointer;
+}
+.view-switch button.on {
+  background: var(--ink);
+  color: #fff;
+}
+.grid.projects .card-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
 }

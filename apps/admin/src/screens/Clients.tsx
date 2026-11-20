@@ -391,6 +391,22 @@ export function NewClient() {
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
   const cents = (s: string) => Math.round(Number(s.replace(',', '.')) * 100);
+  // CLI-01 : vérification du SIRET auprès de l'INSEE, qui pré-remplit raison sociale, adresse et TVA
+  const [sirene, setSirene] = useState<{ ok: boolean; text: string } | null>(null);
+  const checkSiret = async () => {
+    setSirene({ ok: true, text: 'Vérification auprès de l’INSEE…' });
+    try {
+      const r = await get<
+        { statut: 'TROUVE'; nom: string; adresse: string | null; actif: boolean; tva: string } | { statut: 'INTROUVABLE' | 'INVALIDE' | 'INDISPONIBLE'; message: string }
+      >(`/bo/sirene/${encodeURIComponent(form.siret.replace(/\s/g, ''))}`);
+      if (r.statut === 'TROUVE') {
+        setForm((f) => ({ ...f, nom: f.nom || r.nom, adresse: f.adresse || (r.adresse ?? ''), tva: f.tva || r.tva }));
+        setSirene({ ok: r.actif, text: r.actif ? `✓ ${r.nom} : entreprise active au répertoire Sirene.` : `${r.nom} : établissement fermé selon l’INSEE.` });
+      } else setSirene({ ok: r.statut === 'INDISPONIBLE', text: r.message });
+    } catch (e) {
+      setSirene({ ok: false, text: (e as Error).message });
+    }
+  };
 
   return (
     <>
@@ -465,7 +481,15 @@ export function NewClient() {
             <div className="row-actions">
               <label>
                 SIRET
-                <input value={form.siret} onChange={set('siret')} required inputMode="numeric" placeholder="14 chiffres" />
+                <input
+                  value={form.siret}
+                  onChange={(e) => (setForm({ ...form, siret: e.target.value }), setSirene(null))}
+                  onBlur={() => form.siret.replace(/\s/g, '').length === 14 && !sirene && void checkSiret()}
+                  required
+                  inputMode="numeric"
+                  placeholder="14 chiffres"
+                />
+                {sirene && <span className={`hint ${sirene.ok ? '' : 'error-text'}`}>{sirene.text}</span>}
               </label>
               <label>
                 TVA intracommunautaire

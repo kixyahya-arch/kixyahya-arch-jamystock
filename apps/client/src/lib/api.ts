@@ -195,3 +195,54 @@ export function saveBlob(blob: Blob, name: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+/**
+ * SUI-01 : écoute un flux d'évènements (SSE) de l'API. `fetch` plutôt qu'EventSource, pour envoyer le jeton
+ * dans l'en-tête et jamais dans l'adresse. Se reconnecte seul (le serveur ferme le flux toutes les 10 min,
+ * le réseau peut tomber) ; renvoie de quoi arrêter l'écoute.
+ */
+export function listen(path: string, onEvent: (data: unknown) => void): () => void {
+  let stopped = false;
+  let ctrl: AbortController | null = null;
+  const run = async () => {
+    while (!stopped) {
+      ctrl = new AbortController();
+      try {
+        let res = await fetch(BASE + path, { headers: { Authorization: `Bearer ${current?.accessToken ?? ''}` }, signal: ctrl.signal });
+        if (res.status === 401 && (await refresh())) {
+          res = await fetch(BASE + path, { headers: { Authorization: `Bearer ${current?.accessToken ?? ''}` }, signal: ctrl.signal });
+        }
+        if (!res.ok || !res.body) throw new Error(String(res.status));
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const block = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            const data = block.split('\n').find((l) => l.startsWith('data: '));
+            if (data) {
+              try {
+                onEvent(JSON.parse(data.slice(6)));
+              } catch {
+                /* évènement illisible : ignoré */
+              }
+            }
+          }
+        }
+      } catch {
+        /* coupure : on retente plus bas */
+      }
+      if (!stopped) await new Promise((r) => setTimeout(r, 5000));
+    }
+  };
+  void run();
+  return () => {
+    stopped = true;
+    ctrl?.abort();
+  };
+}

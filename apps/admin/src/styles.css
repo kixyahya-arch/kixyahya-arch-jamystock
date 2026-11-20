@@ -2958,3 +2958,8 @@ a.back {
     text-align: center;
   }
 }
+
+/* message d'alerte sous un champ (ex. SIRET inconnu de l'INSEE) */
+.hint.error-text {
+  color: var(--alert);
+}

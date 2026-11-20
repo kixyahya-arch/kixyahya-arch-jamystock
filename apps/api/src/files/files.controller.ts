@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { DATABASE } from '../common/tokens.js';
 import type { Database } from '../db/database.js';
@@ -9,6 +10,16 @@ import { StorageService } from '../storage/storage.service.js';
 import { FilesService, PHOTO_SIZES, type PhotoSize } from './files.service.js';
 
 const TYPES: Record<string, string> = { webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', svg: 'image/svg+xml' };
+
+/**
+ * Tailles dérivées (INV-01 : vignette WebP ≤ 40 Ko). Générées à la première demande à partir de l'originale, puis
+ * gardées : cela couvre d'un coup toutes les sources de photos (terrain, reprise, litiges) sans tâche de fond.
+ */
+const VARIANTS: Record<'t' | 'm', { px: number; quality: number; col: 'cle_vignette' | 'cle_moyenne' }> = {
+  t: { px: 480, quality: 62, col: 'cle_vignette' },
+  m: { px: 1200, quality: 78, col: 'cle_moyenne' },
+};
+const RASTER = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic']);
 
 const Q = z.object({ t: z.string().uuid(), e: z.coerce.number().int(), s: z.string().min(10).max(100) });
 
@@ -36,7 +47,9 @@ export class FilesController {
       return r.rows[0];
     });
     if (!row) throw notFound('Fichier');
-    const key = size === 't' ? (row.t ?? row.m ?? row.o) : size === 'm' ? (row.m ?? row.o) : row.o;
+    let key = size === 't' ? row.t : size === 'm' ? row.m : row.o;
+    if (!key && (size === 't' || size === 'm')) key = await this.variant(q.t, photoId, row.o, size);
+    key ??= size === 't' ? (row.m ?? row.o) : row.o;
     let data: Buffer;
     try {
       data = await this.storage.get(key);
@@ -53,5 +66,26 @@ export class FilesController {
       'Cross-Origin-Resource-Policy': 'same-site',
     });
     res.send(data);
+  }
+
+  /** Fabrique et enregistre une taille dérivée ; renvoie sa clé, ou null si l'originale n'est pas une image matricielle lisible. */
+  private async variant(tenantId: string, photoId: string, original: string, size: 't' | 'm'): Promise<string | null> {
+    const ext = original.split('.').pop()!.toLowerCase();
+    if (!RASTER.has(ext)) return null;
+    const v = VARIANTS[size];
+    try {
+      const data = await sharp(await this.storage.get(original), { failOn: 'none' })
+        .rotate()
+        .resize({ width: v.px, height: v.px, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: v.quality })
+        .toBuffer();
+      const key = `${original.replace(/\/[^/]*$/, '')}/${photoId}-${size}.webp`;
+      await this.storage.put(key, data);
+      // la même image peut servir plusieurs fiches (articles dupliqués) : toutes en profitent
+      await this.db.tx({ tenantId, role: 'SYSTEM' }, (tx) => tx.query(`UPDATE photo SET ${v.col} = $2 WHERE cle_originale = $1 AND ${v.col} IS NULL`, [original, key]));
+      return key;
+    } catch {
+      return null;
+    }
   }
 }

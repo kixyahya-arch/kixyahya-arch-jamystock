@@ -12,6 +12,7 @@ import { conflict, notFound, unprocessable } from '../common/errors.js';
 import { AuditService } from '../audit/audit.service.js';
 import { liveSurface } from '../client/client.controller.js';
 import { FilesService } from '../files/files.service.js';
+import { SireneService } from './sirene.service.js';
 
 const uuid = z.string().uuid();
 const isoDate = z.string().date();
@@ -71,6 +72,7 @@ export class BackofficeController {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(FilesService) private readonly files: FilesService,
     @Inject(CONFIG) private readonly config: AppConfig,
+    @Inject(SireneService) private readonly sirene: SireneService,
   ) {}
 
   /** Invitation du contact d'un client (CLI-01, ADM-03) ; le lien n'est renvoyé que si aucun service d'e-mail n'est configuré. */
@@ -226,6 +228,13 @@ export class BackofficeController {
   }
 
   // ---------------------------------------------------------------- clients (CLI-01)
+
+  /** Vérifie un SIRET auprès de l'INSEE et propose raison sociale, adresse et TVA intracommunautaire. */
+  @Get('sirene/:siret')
+  @RequirePermission('client.manage')
+  checkSiret(@Param('siret') siret: string) {
+    return this.sirene.check(siret);
+  }
 
   @Get('clients')
   @RequirePermission('mission.assign')

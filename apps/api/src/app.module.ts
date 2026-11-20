@@ -44,6 +44,8 @@ import { TrackingService } from './flux/tracking.service.js';
 import { GeocoderService } from './flux/geocoder.service.js';
 import { EmailTemplatesController } from './notifications/email-templates.controller.js';
 import { RepriseController } from './reprise/reprise.controller.js';
+import { OrderEventsController, OrderEventsService } from './orders/order-events.js';
+import { SireneService } from './backoffice/sirene.service.js';
 
 /** Monolithe modulaire (§7.1) : un module Nest par domaine métier au fil des phases. */
 @Module({})
@@ -51,13 +53,14 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController, OrderEventsController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },
         AuthService,
         AuditService,
         OrdersService,
+        OrderEventsService,
         FieldService,
         StorageService,
         FilesService,
@@ -69,6 +72,7 @@ export class AppModule {
         InventoryExportService,
         TrackingService,
         GeocoderService,
+        SireneService,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
       ],
