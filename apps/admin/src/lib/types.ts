@@ -63,6 +63,11 @@ export interface Mission {
   demandeMessage?: string | null;
   articleId?: string | null;
   articleLibelle?: string | null;
+  /** WMS-05 : mission de comptage d'un inventaire tournant */
+  inventaireId?: string | null;
+  inventaireNumero?: string | null;
+  inventaireZone?: string | null;
+  inventaireEmplacements?: number | null;
 }
 
 export interface OrderDetail extends Omit<OrderRow, 'urgent' | 'missionsAAffecter' | 'nbLignes' | 'adresse'> {

@@ -8,6 +8,7 @@ import {
   blFingerprint,
   can,
   formatDocumentNumber,
+  generateQrCode,
   haversineMeters,
   isActiveArticle,
   parseQr,
@@ -32,6 +33,7 @@ import { BusinessError, conflict, forbidden, notFound, unprocessable } from '../
 import { OrdersService, type OrderRow } from '../orders/orders.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { FilesService } from '../files/files.service.js';
+import { usageColumns } from '../warehouse/occupancy.js';
 
 /** Contexte d'exécution d'une action terrain. */
 interface ActionCtx {
@@ -112,6 +114,7 @@ const ACTION_PERMISSION: Record<FieldAction['type'], Permission> = {
   BL_SIGN: 'delivery.execute',
   PICKUP_SIGN: 'delivery.execute',
   PHOTO_REQUEST_DONE: 'stock.move',
+  LOCATION_COUNT: 'stock.move',
 };
 
 /** Distance au-delà de laquelle « Arrivé » déclenche une alerte de cohérence (§4.3). */
@@ -229,6 +232,8 @@ export class FieldService {
         return this.blSign(tx, ctx, action.payload);
       case 'PICKUP_SIGN':
         return this.pickupSign(tx, ctx, action.payload);
+      case 'LOCATION_COUNT':
+        return this.locationCount(tx, ctx, action.payload);
     }
   }
 
@@ -449,8 +454,223 @@ export class FieldService {
         },
         lignes: sortByPath(lignes).map((l) => ({ ...l, vignette: l.vignette ? this.files.photoUrl(user.tenantId, l.vignette, 't') : null })),
         demande: mission.type === 'PHOTO' ? await this.photoRequestInfo(tx, user, mission) : null,
+        comptage: mission.type === 'INVENTAIRE' ? await this.countInfo(tx, mission) : null,
       };
     });
+  }
+
+  // =====================================================================================
+  // Aides à la réception : suggestion d'emplacement (REC-06), duplication (REC-05)
+  // =====================================================================================
+
+  /**
+   * REC-06 : emplacements libres où l'article tient (surface restante, hauteur), en zone de stockage,
+   * non réservés à un autre client. Priorité au regroupement par projet (O5) : même emplacement,
+   * puis même allée, puis même zone ; ensuite au meilleur ajustement pour ne pas gâcher la place.
+   */
+  async suggestLocations(
+    user: AuthUser,
+    q: { articleId?: string; commandeId?: string; entrepriseId?: string; projetId?: string | null; longueurM?: number; largeurM?: number; hauteurM?: number; nombre?: number; empilable?: boolean },
+  ) {
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const a = q.articleId
+        ? (await tx.query<ArticleRow & { hauteur_m: number | null }>('SELECT * FROM article WHERE id = $1', [q.articleId])).rows[0]
+        : undefined;
+      let owner: { entrepriseId: string | null; projetId: string | null } = { entrepriseId: a?.entreprise_id ?? q.entrepriseId ?? null, projetId: a?.projet_id ?? q.projetId ?? null };
+      if (!a && q.commandeId) {
+        const c = (await tx.query<{ entreprise_id: string; projet_id: string | null }>('SELECT entreprise_id, projet_id FROM commande WHERE id = $1', [q.commandeId])).rows[0];
+        if (c) owner = { entrepriseId: c.entreprise_id, projetId: c.projet_id };
+      }
+      const l = a?.longueur_m ?? q.longueurM ?? null;
+      const w = a?.largeur_m ?? q.largeurM ?? null;
+      const h = a?.hauteur_m ?? q.hauteurM ?? null;
+      // une série (REC-05) se range d'un seul scan : il faut la place pour toutes les copies
+      const need = l != null && w != null ? l * w * ((a?.empilable ?? q.empilable) ? 0.5 : 1) * (q.nombre ?? 1) : 0;
+      const rows = (
+        await tx.query<{
+          id: string; code: string; chemin: string; qr_code: string; surface_m2: number; hauteur_m: number | null; dedie: boolean;
+          occupe_m2: number; nb_articles: number; meme_projet: number; meme_client: number; projet_allee: number; projet_zone: number;
+        }>(
+          `SELECT e.id, e.code, e.chemin, e.qr_code, e.surface_m2::float AS surface_m2, e.hauteur_m::float AS hauteur_m,
+                  (e.dedie_entreprise_id IS NOT NULL) AS dedie, ${usageColumns('e')},
+                  (SELECT count(*)::int FROM article x WHERE x.emplacement_courant_id = e.id AND x.statut IN ('EN_STOCK','RESERVE') AND x.projet_id = $2) AS meme_projet,
+                  (SELECT count(*)::int FROM article x WHERE x.emplacement_courant_id = e.id AND x.statut IN ('EN_STOCK','RESERVE') AND x.entreprise_id = $1) AS meme_client,
+                  (SELECT count(*)::int FROM article x JOIN emplacement s ON s.id = x.emplacement_courant_id
+                    WHERE s.parent_id = e.parent_id AND e.parent_id IS NOT NULL AND x.statut IN ('EN_STOCK','RESERVE') AND x.projet_id = $2) AS projet_allee,
+                  (SELECT count(*)::int FROM article x JOIN emplacement s ON s.id = x.emplacement_courant_id
+                    WHERE s.zone_id = e.zone_id AND x.statut IN ('EN_STOCK','RESERVE') AND x.projet_id = $2) AS projet_zone
+             FROM emplacement e JOIN zone z ON z.id = e.zone_id
+            WHERE z.type = 'STOCKAGE' AND e.adressable AND e.statut = 'ACTIF'
+              AND (e.dedie_entreprise_id IS NULL OR e.dedie_entreprise_id = $1)`,
+          [owner.entrepriseId, owner.projetId],
+        )
+      ).rows;
+      const scored = rows
+        .map((r) => {
+          const libre = r.surface_m2 > 0 ? r.surface_m2 - r.occupe_m2 : null;
+          if (libre != null && libre + 1e-4 < need) return null;
+          if (h != null && r.hauteur_m != null && h > r.hauteur_m + 1e-4) return null;
+          // sans surface déclarée, on ne propose qu'un emplacement vide
+          if (libre == null && r.nb_articles > 0 && !r.meme_projet) return null;
+          const projet = !!owner.projetId;
+          const raison =
+            projet && r.meme_projet ? 'Le même projet est déjà rangé ici'
+            : projet && r.projet_allee ? 'À côté des biens du même projet'
+            : r.dedie ? 'Emplacement réservé à ce client'
+            : r.meme_client ? 'Ce client a déjà des biens ici'
+            : projet && r.projet_zone ? 'Dans la zone du même projet'
+            : 'Emplacement libre adapté';
+          const score =
+            (projet && r.meme_projet ? 1000 : 0) + (projet && r.projet_allee ? 400 : 0) + (r.dedie ? 300 : 0) + (r.meme_client ? 150 : 0) +
+            (projet && r.projet_zone ? 60 : 0) - (libre == null ? 20 : Math.min(libre - need, 50));
+          return { id: r.id, code: r.code, chemin: r.chemin, qrCode: r.qr_code, libreM2: libre == null ? null : Math.round(libre * 100) / 100, raison, score };
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x)
+        .sort((x, y) => y.score - x.score || x.chemin.localeCompare(y.chemin, 'fr', { numeric: true }));
+      return { besoinM2: Math.round(need * 100) / 100, suggestions: scored.slice(0, 3).map(({ score: _s, ...x }) => x) };
+    });
+  }
+
+  /**
+   * REC-05 : « encore 11 comme celui-ci ». Chaque copie reprend catégorie, libellé, description, dimensions,
+   * état et photos du modèle, avec son propre QR ; elles attendent au quai de réception d'être étiquetées et rangées.
+   */
+  async duplicate(user: AuthUser, articleId: string, nombre: number) {
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const src = (await tx.query<ArticleRow & Record<string, unknown>>('SELECT * FROM article WHERE id = $1', [articleId])).rows[0];
+      if (!src) throw notFound('Article modèle (synchronisez d’abord la réception)');
+      if (!['EN_RECEPTION', 'EN_STOCK', 'RESERVE'].includes(src.statut)) throw conflict('STATUT', `Article ${src.statut} : il ne peut pas servir de modèle`);
+      const photos = (
+        await tx.query<{ id: string; cle_originale: string; cle_vignette: string | null; cle_moyenne: string | null; type_mime: string | null; taille_octets: number | null; televersee: boolean }>(
+          `SELECT id, cle_originale, cle_vignette, cle_moyenne, type_mime, taille_octets, televersee FROM photo
+            WHERE article_id = $1 AND contexte IN ('RECEPTION','ENLEVEMENT') ORDER BY prise_le LIMIT $2`,
+          [src.id, MAX_PHOTOS_PER_ARTICLE],
+        )
+      ).rows;
+      if (!photos.length) throw unprocessable('PHOTOS', 'Le modèle n’a pas encore de photo : impossible de le dupliquer');
+      const quai = await this.receptionDock(tx);
+      const ctx: ActionCtx = { user, deviceId: 'terminal', at: new Date(), warnings: [] };
+      const out: { id: string; qrCode: string }[] = [];
+      for (let i = 0; i < nombre; i++) {
+        const id = uuidv7();
+        const qr = generateQrCode('A');
+        await tx.query(
+          `INSERT INTO article (id, tenant_id, entreprise_id, projet_id, qr_code, libelle, categorie_id, description, longueur_m, largeur_m,
+                                hauteur_m, poids_kg, empilable, etat, statut, commande_collecte_id, created_by)
+           SELECT $1, tenant_id, entreprise_id, projet_id, $2, libelle, categorie_id, description, longueur_m, largeur_m,
+                  hauteur_m, poids_kg, empilable, etat, 'ATTENDU', commande_collecte_id, $3
+             FROM article WHERE id = $4`,
+          [id, qr, user.id, src.id],
+        );
+        const copy = (await tx.query<ArticleRow>('SELECT * FROM article WHERE id = $1', [id])).rows[0]!;
+        await this.move(tx, ctx, copy, { type: 'RECEPTION', toLocationId: quai, motif: `Copie de ${src.qr_code}` });
+        for (const p of photos) {
+          await tx.query(
+            `INSERT INTO photo (id, tenant_id, article_id, cle_originale, cle_vignette, cle_moyenne, type_mime, taille_octets, contexte, prise_le, prise_par, televersee, copie_de)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'RECEPTION',now(),$9,$10,$11)`,
+            [uuidv7(), user.tenantId, id, p.cle_originale, p.cle_vignette, p.cle_moyenne, p.type_mime, p.taille_octets, user.id, p.televersee, p.id],
+          );
+        }
+        out.push({ id, qrCode: qr });
+      }
+      await this.audit.record(tx, user, {
+        action: 'ARTICLE_DUPLIQUE',
+        objet: 'article',
+        objetId: src.id,
+        entrepriseId: src.entreprise_id,
+        apres: { copies: out.map((x) => x.qrCode) },
+      });
+      return { source: { id: src.id, qrCode: src.qr_code, libelle: src.libelle }, articles: out };
+    });
+  }
+
+  // =====================================================================================
+  // Inventaire tournant (WMS-05) : comptage en aveugle, emplacement par emplacement
+  // =====================================================================================
+
+  private async countInfo(tx: Tx, mission: MissionRow) {
+    const r = await tx.query<{ id: string; code: string; chemin: string; qrCode: string; compte: boolean; trouves: number }>(
+      `SELECT e.id, e.code, e.chemin, e.qr_code AS "qrCode", c.compte_le IS NOT NULL AS compte,
+              cardinality(c.trouves) + cardinality(c.inconnus) AS trouves
+         FROM inventaire_comptage c JOIN emplacement e ON e.id = c.emplacement_id
+        WHERE c.mission_id = $1 ORDER BY c.ordre`,
+      [mission.id],
+    );
+    const d = mission.donnees as { numero?: string; zone?: string; partie?: number };
+    return { numero: d.numero ?? null, zone: d.zone ?? null, partie: d.partie ?? 1, emplacements: r.rows };
+  }
+
+  /**
+   * L'opérateur scanne l'emplacement puis tout ce qui s'y trouve. Le stock attendu n'est pas montré
+   * (comptage en aveugle) ; il est figé au moment du comptage et comparé : manquants, articles trouvés
+   * ailleurs que là où le système les plaçait, étiquettes inconnues. Rien n'est corrigé ici : les écarts
+   * sont arbitrés au Back-Office. Recompter un emplacement remplace son comptage précédent.
+   */
+  private async locationCount(tx: Tx, ctx: ActionCtx, p: { missionId: string; locationQr: string; qrs: string[] }) {
+    // un emplacement peut être recompté tant que l'inventaire est ouvert, même si la mission est finie
+    const m = await this.mission(tx, ctx.user, p.missionId, false, ['INVENTAIRE']);
+    await tx.query('SELECT 1 FROM mission WHERE id = $1 FOR UPDATE', [m.id]);
+    const loc = await this.locationByQr(tx, p.locationQr);
+    const c = (
+      await tx.query<{ id: string; inventaire_id: string }>('SELECT id, inventaire_id FROM inventaire_comptage WHERE mission_id = $1 AND emplacement_id = $2 FOR UPDATE', [m.id, loc.id])
+    ).rows[0];
+    if (!c) throw unprocessable('HORS_INVENTAIRE', `L’emplacement ${loc.code} ne fait pas partie de ce comptage`);
+    const inv = (await tx.query<{ statut: string }>('SELECT statut FROM inventaire WHERE id = $1 FOR UPDATE', [c.inventaire_id])).rows[0]!;
+    if (inv.statut !== 'EN_COURS') throw conflict('INVENTAIRE_CLOS', 'Cet inventaire n’est plus en cours de comptage');
+    if (m.statut === 'AFFECTEE' || m.statut === 'A_AFFECTER') await this.startMission(tx, ctx, m);
+
+    const attendus = (
+      await tx.query<{ id: string }>(`SELECT id FROM article WHERE emplacement_courant_id = $1 AND statut IN ('EN_STOCK','RESERVE')`, [loc.id])
+    ).rows.map((r) => r.id);
+    const trouves = new Set<string>();
+    const inconnus = new Set<string>();
+    for (const raw of p.qrs) {
+      const q = parseQr(raw);
+      if (q?.type === 'U') {
+        const u = await tx.query<{ id: string }>('SELECT a.id FROM article a JOIN unite_manutention u ON u.id = a.um_courante_id WHERE u.qr_code = $1', [q.qr]);
+        if (!u.rowCount) inconnus.add(q.qr);
+        for (const a of u.rows) trouves.add(a.id);
+      } else if (q?.type === 'A') {
+        const a = (await tx.query<{ id: string }>('SELECT id FROM article WHERE qr_code = $1', [q.qr])).rows[0];
+        if (a) trouves.add(a.id);
+        else inconnus.add(q.qr);
+      } else {
+        inconnus.add(raw.trim().slice(0, 200));
+      }
+    }
+    await tx.query('DELETE FROM inventaire_ecart WHERE inventaire_id = $1 AND emplacement_id = $2 AND decision IS NULL', [c.inventaire_id, loc.id]);
+    const ecart = (type: string, articleId: string | null, qr: string | null, systeme: string | null) =>
+      tx.query(
+        `INSERT INTO inventaire_ecart (id, tenant_id, inventaire_id, emplacement_id, type, article_id, qr, emplacement_systeme_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [uuidv7(), ctx.user.tenantId, c.inventaire_id, loc.id, type, articleId, qr, systeme],
+      );
+    let n = 0;
+    for (const id of attendus) if (!trouves.has(id)) (await ecart('MANQUANT', id, null, loc.id), n++);
+    const extra = [...trouves].filter((id) => !attendus.includes(id));
+    if (extra.length) {
+      const rows = (await tx.query<{ id: string; emplacement_courant_id: string | null }>('SELECT id, emplacement_courant_id FROM article WHERE id = ANY($1)', [extra])).rows;
+      for (const a of rows) (await ecart('DEPLACE', a.id, null, a.emplacement_courant_id), n++);
+    }
+    for (const qr of inconnus) (await ecart('INCONNU', null, qr, null), n++);
+    await tx.query('UPDATE inventaire_comptage SET attendus = $2, trouves = $3, inconnus = $4, compte_le = $5, compte_par = $6 WHERE id = $1', [
+      c.id, attendus, [...trouves], [...inconnus], ctx.at, ctx.user.id,
+    ]);
+
+    const left = (await tx.query<{ mission: number; total: number }>(
+      `SELECT count(*) FILTER (WHERE mission_id = $2 AND compte_le IS NULL)::int AS mission, count(*) FILTER (WHERE compte_le IS NULL)::int AS total
+         FROM inventaire_comptage WHERE inventaire_id = $1`,
+      [c.inventaire_id, m.id],
+    )).rows[0]!;
+    if (!left.mission && m.statut !== 'TERMINEE') await this.finishMission(tx, ctx, m);
+    if (!left.total) {
+      const ecarts = (await tx.query<{ n: number }>('SELECT count(*)::int AS n FROM inventaire_ecart WHERE inventaire_id = $1 AND decision IS NULL', [c.inventaire_id])).rows[0]!.n;
+      await tx.query(
+        `UPDATE inventaire SET statut = $2, termine_le = now(), clos_le = CASE WHEN $2 = 'CLOS' THEN now() END WHERE id = $1`,
+        [c.inventaire_id, ecarts ? 'A_ARBITRER' : 'CLOS'],
+      );
+      if (ecarts) await this.notifyStaff(tx, ctx.user, 'SUPER_ADMIN', 'INVENTAIRE_A_ARBITRER', { inventaireId: c.inventaire_id, numero: (m.donnees as { numero?: string }).numero, ecarts });
+    }
+    return { emplacement: loc.code, attendus: attendus.length, trouves: trouves.size, ecarts: n, restants: left.mission, termine: !left.mission };
   }
 
   private async pick(tx: Tx, ctx: ActionCtx, p: { missionId: string; articleQr: string }) {
@@ -760,6 +980,8 @@ export class FieldService {
         [photoId, key, mime, size],
       );
       if (!r.rowCount) throw notFound('Photo (envoyez d’abord l’action qui la déclare)');
+      // REC-05 : les copies d'un article dupliqué partagent ce fichier
+      await tx.query(`UPDATE photo SET televersee = true, cle_originale = $2, type_mime = $3, taille_octets = $4 WHERE copie_de = $1`, [photoId, key, mime, size]);
       return { photoId, televersee: true };
     });
   }

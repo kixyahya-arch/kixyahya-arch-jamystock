@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { ARTICLE_CONDITIONS, type SyncRequest } from '@jamystock/domain';
@@ -44,6 +44,7 @@ const Action = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('UM_SPLIT'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('PICK_COMPLETE'), payload: z.object({ missionId: uuid }) }),
+  z.object({ type: z.literal('LOCATION_COUNT'), payload: z.object({ missionId: uuid, locationQr: qr, qrs: z.array(qr).max(500) }) }),
   z.object({ type: z.literal('LOAD'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('DEPART'), payload: z.object({ missionId: uuid }) }),
   z.object({ type: z.literal('ARRIVE'), payload: z.object({ missionId: uuid, gps: gps.optional() }) }),
@@ -97,6 +98,28 @@ export class FieldController {
   @RequirePermission('stock.move')
   receptions(@CurrentUser() user: AuthUser) {
     return this.field.expectedReceptions(user);
+  }
+
+  /** REC-06 : emplacements suggérés pour ranger un article (en ligne ; hors réseau, l'opérateur choisit seul). */
+  @Get('locations/suggest')
+  @RequirePermission('stock.move')
+  suggest(@CurrentUser() user: AuthUser, @Query() query: unknown) {
+    const num = z.coerce.number().positive().max(100).optional();
+    const q = z
+      .object({
+        articleId: uuid.optional(), commandeId: uuid.optional(), entrepriseId: uuid.optional(), projetId: uuid.optional(),
+        longueurM: num, largeurM: num, hauteurM: num, nombre: z.coerce.number().int().min(1).max(51).optional(), empilable: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+      })
+      .parse(query);
+    return this.field.suggestLocations(user, q);
+  }
+
+  /** REC-05 : « encore N comme celui-ci ». */
+  @Post('articles/:id/duplicate')
+  @RequirePermission('stock.move')
+  duplicate(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const { nombre } = z.object({ nombre: z.number().int().min(1).max(50) }).parse(body);
+    return this.field.duplicate(user, uuid.parse(id), nombre);
   }
 
   @Get('missions/:id')

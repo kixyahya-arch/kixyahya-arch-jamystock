@@ -183,6 +183,16 @@ function MissionCard({
           </small>
         </span>
       )}
+      {m.type === 'INVENTAIRE' && m.inventaireId && (
+        <span className="photo-req">
+          <a href={href({ name: 'inventaire', id: m.inventaireId })} className="mono">
+            {m.inventaireNumero}
+          </a>
+          <small>
+            {m.inventaireZone} · {m.inventaireEmplacements} emplacement{(m.inventaireEmplacements ?? 0) > 1 ? 's' : ''} à compter
+          </small>
+        </span>
+      )}
       <span className="muted">
         {m.numero && (
           <a href={href({ name: 'demande', id: m.commandeId! })} className="mono">

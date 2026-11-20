@@ -3,7 +3,8 @@ import { ARTICLE_CONDITIONS, uuidv7, type ArticleCondition } from '@jamystock/do
 import { Scanner } from '../components/Scanner';
 import { PhotoCapture, type CapturedPhoto } from '../components/PhotoCapture';
 import { Banner, Choice, Screen } from '../components/ui';
-import { enqueue, enqueuePhoto } from '../lib/outbox';
+import { enqueue, enqueuePhoto, flush } from '../lib/outbox';
+import { api, apiBlob, ApiError, NetworkError } from '../lib/api';
 import { cacheGet, markGet, markSet } from '../lib/db';
 import { loadReceptions, type Bootstrap, type Reception } from '../lib/data';
 
@@ -43,10 +44,17 @@ export function Receptions({ onBack, open }: { onBack: () => void; open: (r: Rec
   );
 }
 
+interface Dims {
+  longueurM?: number;
+  largeurM?: number;
+  hauteurM?: number;
+}
+
 type Step =
   | { s: 'scan-article' }
   | { s: 'form'; qr: string; articleId: string; known?: { libelle: string } }
-  | { s: 'scan-location'; qr: string; libelle: string }
+  | { s: 'scan-location'; qr: string; libelle: string; articleId: string; dims: Dims }
+  | { s: 'series'; libelle: string; articles: { id: string; qrCode: string }[] }
   | { s: 'pallet'; umQr: string; count: number };
 
 /**
@@ -59,6 +67,7 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
   const [message, setMessage] = useState<{ kind: 'ok' | 'error' | 'info'; text: string } | null>(null);
   const [boot, setBoot] = useState<Bootstrap | undefined>();
   const [relabel, setRelabel] = useState<{ id: string; libelle: string } | null>(null);
+  const [last, setLast] = useState<{ articleId: string; libelle: string } | null>(null);
   const markKey = `reception:${reception.commandeId}`;
 
   useEffect(() => {
@@ -79,7 +88,7 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
     <Screen title={`Réception ${reception.numero}`} onBack={onBack}>
       <p className="hint">
         {reception.client}
-        {reception.projet ? ` · ${reception.projet}` : ''} · {done.length} traité(s) sur {reception.nbArticles} annoncé(s)
+        {reception.projet ? ` · ${reception.projet}` : ''} · {reception.nbArticles} annoncé(s) · {done.length} traité(s)
       </p>
       {message && <Banner kind={message.kind}>{message.text}</Banner>}
 
@@ -90,6 +99,7 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
             label="Scannez l'étiquette de l'objet (ou d'une palette)"
             onScan={(qr, type) => {
               setMessage(null);
+              setLast(null);
               if (type === 'U') {
                 void enqueue({ type: 'UM_CREATE', payload: { umId: uuidv7(), qr, umType: 'PALETTE' } });
                 setStep({ s: 'pallet', umQr: qr, count: 0 });
@@ -149,21 +159,53 @@ export function ReceptionFlow({ reception, onBack }: { reception: Reception; onB
               },
             });
             await remember(step.articleId);
-            setStep({ s: 'scan-location', qr: step.qr, libelle: f.libelle });
+            setStep({ s: 'scan-location', qr: step.qr, libelle: f.libelle, articleId: step.articleId, dims: { longueurM: f.longueurM, largeurM: f.largeurM, hauteurM: f.hauteurM } });
           }}
         />
       )}
 
       {step.s === 'scan-location' && (
-        <Scanner
-          expect={['E', 'U']}
-          label={`Rangez « ${step.libelle} » : scannez l'emplacement ou la palette`}
-          onScan={async (qr, type) => {
-            if (type === 'U') await enqueue({ type: 'UM_ADD', payload: { umQr: qr, articleQr: step.qr } });
-            else await enqueue({ type: 'ARTICLE_STORE', payload: { articleQr: step.qr, locationQr: qr } });
-            setMessage({ kind: 'ok', text: `✓ « ${step.libelle} » → ${type === 'U' ? 'palette' : locationName(qr)}` });
+        <>
+          <Suggestions key={step.articleId} commandeId={reception.commandeId} dims={step.dims} />
+          <Scanner
+            expect={['E', 'U']}
+            label={`Rangez « ${step.libelle} » : scannez l'emplacement ou la palette`}
+            onScan={async (qr, type) => {
+              if (type === 'U') await enqueue({ type: 'UM_ADD', payload: { umQr: qr, articleQr: step.qr } });
+              else await enqueue({ type: 'ARTICLE_STORE', payload: { articleQr: step.qr, locationQr: qr } });
+              setMessage({ kind: 'ok', text: `✓ « ${step.libelle} » → ${type === 'U' ? 'palette' : locationName(qr)}` });
+              setLast({ articleId: step.articleId, libelle: step.libelle });
+              setStep({ s: 'scan-article' });
+            }}
+          />
+        </>
+      )}
+
+      {step.s === 'series' && (
+        <SeriesFlow
+          commandeId={reception.commandeId}
+          libelle={step.libelle}
+          articles={step.articles}
+          locationName={locationName}
+          onDone={(n, loc) => {
+            setMessage({ kind: 'ok', text: `✓ ${n} copie(s) de « ${step.libelle} » → ${locationName(loc)}` });
             setStep({ s: 'scan-article' });
           }}
+          onCancel={() => setStep({ s: 'scan-article' })}
+        />
+      )}
+
+      {step.s === 'scan-article' && last && (
+        <DuplicateOffer
+          key={last.articleId}
+          source={last}
+          onCreated={(articles) => {
+            void Promise.all(articles.map((a) => remember(a.id)));
+            setMessage(null);
+            setLast(null);
+            setStep({ s: 'series', libelle: last.libelle, articles });
+          }}
+          onError={(text) => setMessage({ kind: 'error', text })}
         />
       )}
 
@@ -366,5 +408,165 @@ export function Transfer({ onBack }: { onBack: () => void }) {
         />
       )}
     </Screen>
+  );
+}
+
+interface Suggestion {
+  id: string;
+  code: string;
+  chemin: string;
+  qrCode: string;
+  libreM2: number;
+  raison: string;
+}
+
+/** REC-06 : les 3 emplacements libres les plus logiques (même projet, même allée, place suffisante). */
+function Suggestions({ commandeId, articleId, dims = {}, nombre }: { commandeId: string; articleId?: string; dims?: Dims; nombre?: number }) {
+  const [state, setState] = useState<{ list?: Suggestion[]; offline?: boolean }>({});
+  useEffect(() => {
+    const q = new URLSearchParams(articleId ? { articleId } : { commandeId });
+    for (const [k, v] of Object.entries(dims)) if (v) q.set(k, String(v));
+    if (nombre && nombre > 1) q.set('nombre', String(nombre));
+    api<{ suggestions: Suggestion[] }>(`/field/locations/suggest?${q}`)
+      .then((r) => setState({ list: r.suggestions }))
+      .catch((e) => setState({ list: [], offline: e instanceof NetworkError }));
+  }, [commandeId, articleId, dims, nombre]);
+  if (state.offline) return <p className="hint">Hors réseau : pas de suggestion d’emplacement, rangez où il y a de la place.</p>;
+  if (!state.list) return <p className="hint">Recherche d’un emplacement…</p>;
+  if (!state.list.length) return <p className="hint">Aucun emplacement libre assez grand : voyez avec le chef de quai.</p>;
+  return (
+    <section className="suggest">
+      <h2>Emplacements suggérés</h2>
+      <ol className="list">
+        {state.list.map((s, i) => (
+          <li key={s.id} className={`suggest-item ${i === 0 ? 'best' : ''}`}>
+            <strong>{s.chemin}</strong>
+            <small>
+              {s.raison} · {s.libreM2.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} m² libres
+            </small>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** REC-05 : « encore N comme celui-ci » — l'objet qui vient d'être rangé sert de modèle. */
+function DuplicateOffer({
+  source,
+  onCreated,
+  onError,
+}: {
+  source: { articleId: string; libelle: string };
+  onCreated: (a: { id: string; qrCode: string }[]) => void;
+  onError: (text: string) => void;
+}) {
+  const [n, setN] = useState(1);
+  const [busy, setBusy] = useState(false);
+  return (
+    <section className="dup-offer">
+      <p>
+        Plusieurs « {source.libelle} » identiques ? Créez les copies d’un coup, avec la même photo et les mêmes dimensions.
+      </p>
+      <div className="dup-row">
+        <label>
+          Encore
+          <input type="number" inputMode="numeric" min={1} max={50} value={n} onChange={(e) => setN(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+          comme celui-ci
+        </label>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await flush();
+              const r = await api<{ articles: { id: string; qrCode: string }[] }>(`/field/articles/${source.articleId}/duplicate`, {
+                method: 'POST',
+                body: JSON.stringify({ nombre: n }),
+              });
+              onCreated(r.articles);
+            } catch (e) {
+              onError(e instanceof NetworkError ? 'Hors réseau : la duplication demande une connexion.' : e instanceof ApiError ? e.message : 'Duplication impossible.');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? 'Création…' : 'Créer les copies'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Série de copies : imprimer leurs étiquettes, les coller, puis ranger toute la série d'un scan d'emplacement. */
+function SeriesFlow({
+  commandeId,
+  libelle,
+  articles,
+  locationName,
+  onDone,
+  onCancel,
+}: {
+  commandeId: string;
+  libelle: string;
+  articles: { id: string; qrCode: string }[];
+  locationName: (qr: string) => string;
+  onDone: (n: number, loc: string) => void;
+  onCancel: () => void;
+}) {
+  const [printing, setPrinting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const print = async (format: 'ZEBRA_50x25' | 'L7651') => {
+    setPrinting(format);
+    setError(null);
+    try {
+      const blob = await apiBlob('/bo/warehouse/labels/articles', { ids: articles.map((a) => a.id), format });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError(e instanceof NetworkError ? 'Hors réseau : impression impossible.' : (e as Error).message);
+    } finally {
+      setPrinting(null);
+    }
+  };
+  return (
+    <section className="series">
+      <h2>
+        {articles.length} copie(s) de « {libelle} »
+      </h2>
+      <p className="hint">1. Imprimez et collez les étiquettes. 2. Scannez l’emplacement : toute la série y est rangée.</p>
+      {error && <Banner kind="error">{error}</Banner>}
+      <div className="dup-row">
+        <button type="button" className="btn" disabled={!!printing} onClick={() => void print('ZEBRA_50x25')}>
+          {printing === 'ZEBRA_50x25' ? 'Préparation…' : 'Étiquettes Zebra'}
+        </button>
+        <button type="button" className="btn" disabled={!!printing} onClick={() => void print('L7651')}>
+          {printing === 'L7651' ? 'Préparation…' : 'Planche A4'}
+        </button>
+      </div>
+      <ul className="scan-list">
+        {articles.map((a) => (
+          <li key={a.id}>
+            <span className="mono">{a.qrCode}</span>
+          </li>
+        ))}
+      </ul>
+      <Suggestions commandeId={commandeId} articleId={articles[0]?.id} nombre={articles.length} />
+      <Scanner
+        expect={['E']}
+        label="Scannez l'emplacement de la série"
+        onScan={async (qr) => {
+          for (const a of articles) await enqueue({ type: 'ARTICLE_STORE', payload: { articleQr: a.qrCode, locationQr: qr } });
+          onDone(articles.length, qr);
+        }}
+      />
+      <button type="button" className="btn secondary" onClick={onCancel}>
+        Ranger plus tard
+      </button>
+    </section>
   );
 }

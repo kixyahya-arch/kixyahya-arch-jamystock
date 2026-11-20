@@ -64,6 +64,8 @@ export type FieldAction =
   /** CMD-09 : sortir de son UM un article demandé seul (mission de dégroupage) ; les autres restent sur l'UM */
   | { type: 'UM_SPLIT'; payload: { missionId: string; articleQr: string } }
   | { type: 'LOAD'; payload: { missionId: string; articleQr: string } }
+  /** WMS-05 : comptage d'un emplacement (inventaire tournant) : tout ce qui y a été scanné, articles ou palettes */
+  | { type: 'LOCATION_COUNT'; payload: { missionId: string; locationQr: string; qrs: string[] } }
   | { type: 'DEPART'; payload: { missionId: string } }
   | { type: 'ARRIVE'; payload: { missionId: string; gps?: GpsFix } }
   | { type: 'BL_SIGN'; payload: BlSignPayload }

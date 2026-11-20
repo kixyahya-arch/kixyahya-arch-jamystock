@@ -487,6 +487,19 @@ export class WarehouseController {
   @RequirePermission('warehouse.manage')
   async labels(@CurrentUser() user: AuthUser, @Body() body: unknown, @Res() res: Response) {
     const b = LabelsBody.parse(body);
+    return this.sendLabels(user, b, res);
+  }
+
+  /** REC-05 : l'opérateur imprime en série les étiquettes des articles qu'il vient de dupliquer. */
+  @Post('labels/articles')
+  @HttpCode(200)
+  @RequirePermission('stock.move')
+  async articleLabels(@CurrentUser() user: AuthUser, @Body() body: unknown, @Res() res: Response) {
+    const b = LabelsBody.parse({ ...(body as object), kind: 'ARTICLE' });
+    return this.sendLabels(user, b, res);
+  }
+
+  private async sendLabels(user: AuthUser, b: z.infer<typeof LabelsBody>, res: Response) {
     const labels = await this.db.tx(ctxOf(user), (tx) => this.labelContents(tx, b.kind, b.ids, b.lot));
     if (!labels.length) throw unprocessable('AUCUNE_ETIQUETTE', 'Aucune étiquette à imprimer');
     const stamp = new Date().toISOString().slice(0, 10);

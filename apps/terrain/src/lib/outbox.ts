@@ -52,10 +52,23 @@ export async function enqueuePhoto(photoId: string, blob: Blob, priority = 1): P
 }
 
 let flushing: Promise<void> | null = null;
+let again = false;
 
-/** Envoie la file. Les erreurs métier sont mises de côté (à montrer au superviseur), le reste est réessayé. */
+/**
+ * Envoie la file. Les erreurs métier sont mises de côté (à montrer au superviseur), le reste est réessayé.
+ * Un geste enregistré pendant un envoi en cours est envoyé juste après, sans attendre le prochain cycle.
+ */
 export function flush(): Promise<void> {
-  flushing ??= doFlush().finally(() => {
+  if (flushing) {
+    again = true;
+    return flushing;
+  }
+  flushing = (async () => {
+    do {
+      again = false;
+      await doFlush();
+    } while (again && !state.lastError);
+  })().finally(() => {
     flushing = null;
   });
   return flushing;

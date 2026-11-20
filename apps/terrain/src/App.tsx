@@ -9,6 +9,7 @@ import { Picking } from './screens/Picking';
 import { Delivery, Pickup } from './screens/Delivery';
 import { PhotoRequest } from './screens/PhotoRequest';
 import { Degroupage } from './screens/Degroupage';
+import { InventoryCount } from './screens/InventoryCount';
 import { Banner, Screen } from './components/ui';
 
 export type Route =
@@ -60,6 +61,8 @@ export function App() {
             return <PhotoRequest missionId={route.id} onBack={home} />;
           case 'DEGROUPAGE':
             return <Degroupage missionId={route.id} onBack={home} />;
+          case 'INVENTAIRE':
+            return <InventoryCount missionId={route.id} onBack={home} />;
           default:
             return (
               <Screen title="Mission" onBack={home}>

@@ -74,6 +74,7 @@ export function Home({ session, go, onLogout }: { session: Session; go: (r: Rout
               <span className="row-main">
                 <strong>{TYPE_LABEL[m.type] ?? m.type}</strong> · {m.numero ?? m.articleLibelle}
                 {m.adresse?.libelle && <small>{m.adresse.libelle}</small>}
+                {m.zone && <small>{m.zone}</small>}
               </span>
               <span className={`pill ${m.statut === 'EN_COURS' ? 'warn' : ''}`}>{m.statut === 'EN_COURS' ? 'En cours' : m.creneau ?? 'À faire'}</span>
             </button>

@@ -82,7 +82,8 @@ export class MissionsController {
     return this.db.tx(ctxOf(user), async (tx) => {
       const missions = (
         await tx.query(
-          `SELECT m.id, m.type, m.statut, m.ordre, m.debut_prevu AS "debutPrevu", c.id AS "commandeId", c.numero, c.adresse,
+          `SELECT m.id, m.type, m.statut, m.ordre, m.debut_prevu AS "debutPrevu", c.id AS "commandeId", coalesce(c.numero, m.donnees->>'numero') AS numero, c.adresse,
+                  m.donnees->>'zone' AS zone,
                   c.contraintes_acces AS "contraintesAcces", c.contact_site AS "contactSite", c.creneau_confirme AS creneau,
                   coalesce(pa.nom_client, pa.libelle) AS "articleLibelle"
              FROM mission m LEFT JOIN commande c ON c.id = m.commande_id
