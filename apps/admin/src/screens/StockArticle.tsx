@@ -14,6 +14,10 @@ interface Fiche {
   statut: string;
   etat: string;
   dateEntree: string | null;
+  couleur: string | null;
+  emplacementOrigine: string | null;
+  ancienCode: string | null;
+  description: string | null;
   client: string;
   projet: string | null;
   categorie: string | null;
@@ -102,7 +106,24 @@ export function StockArticle({ id }: { id: string }) {
               <dd>{CONDITION[f.etat] ?? f.etat}</dd>
               <dt>Entré le</dt>
               <dd>{dateFr(f.dateEntree)}</dd>
+              {f.couleur && (
+                <>
+                  <dt>Couleur</dt>
+                  <dd>{f.couleur}</dd>
+                </>
+              )}
+              {(f.emplacementOrigine || f.ancienCode) && (
+                <>
+                  <dt>Ancien logiciel</dt>
+                  <dd>
+                    {f.emplacementOrigine && <>Allée {f.emplacementOrigine}</>}
+                    {f.emplacementOrigine && f.ancienCode && ' · '}
+                    {f.ancienCode && <span className="mono">{f.ancienCode}</span>}
+                  </dd>
+                </>
+              )}
             </dl>
+            {f.description && <p className="muted small">{f.description}</p>}
           </section>
           <section className="panel">
             <h2>Historique des mouvements</h2>

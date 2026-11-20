@@ -73,8 +73,10 @@ const TRANSITIONS: Record<OrderType, TransitionTable> = {
   COLLECTE: {
     ...COMMON,
     PLANIFIEE: ['COLLECTEE', 'ANNULEE'],
-    COLLECTEE: ['STOCKEE'],
+    // un transfert de site à site est « livré » sur le site de destination au lieu d'être stocké
+    COLLECTEE: ['STOCKEE', 'LIVREE'],
     STOCKEE: ['CLOTUREE'],
+    LIVREE: ['CLOTUREE'],
   },
 };
 

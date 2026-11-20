@@ -22,6 +22,9 @@ export interface RepriseArticleRow {
   codeBarres: string | null;
   categorie: string | null;
   description: string | null;
+  couleur: string | null;
+  /** Emplacement noté dans l'ancien logiciel (« allée G3 haut ») : repère pendant la transition. */
+  emplacementOrigine: string | null;
   quantite: number;
   emplacement: string | null;
   longueurM: number | null;
@@ -233,6 +236,8 @@ export const ARTICLE_ALIASES: Record<string, string[]> = {
   dateEntree: ['date entree', 'date d entree', 'date de reception', 'entree le', 'date de creation', 'cree le', 'created at', 'date'],
   situation: ['situation', 'statut', 'statut stock', 'etat du stock', 'ou est l objet'],
   photos: ['photo', 'photos', 'image', 'images', 'url photo', 'url image', 'picture', 'visuel'],
+  couleur: ['couleur', 'coloris', 'teinte', 'color', 'colour', 'finition'],
+  emplacementOrigine: ['emplacement d origine', 'ancien emplacement', 'emplacement ancien', 'allee', 'emplacement monstock'],
 };
 
 export interface RepriseArticleOptions {
@@ -310,6 +315,8 @@ export function parseRepriseArticles(text: string, opts: RepriseArticleOptions =
       codeBarres,
       categorie: get('categorie') || null,
       description: get('description') || null,
+      couleur: get('couleur') || null,
+      emplacementOrigine: get('emplacementOrigine') || null,
       quantite: q!,
       emplacement: get('emplacement') || null,
       ...(dims as { longueurM: number | null; largeurM: number | null; hauteurM: number | null }),

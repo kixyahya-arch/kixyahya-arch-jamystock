@@ -72,6 +72,12 @@ describe('reprise des articles', () => {
     ]);
   });
 
+  it('couleur et emplacement de l’ancien logiciel', () => {
+    const r = parseRepriseArticles("Désignation;Client;Couleur;Emplacement d'origine\nMiroir;BNP;Blanc;M 3 H");
+    expect(r.rows[0]).toMatchObject({ couleur: 'Blanc', emplacementOrigine: 'M 3 H', emplacement: null });
+    expect(r.ignorees).toEqual([]);
+  });
+
   it('refuse une quantité aberrante', () => {
     const r = parseRepriseArticles('Nom;Client;Stock\nVis;Horizon;12000');
     expect(r.errors[0]!.message).toMatch(/supérieure à 500/);

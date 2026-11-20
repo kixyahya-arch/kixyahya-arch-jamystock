@@ -357,13 +357,65 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
   const [svg, setSvg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [departed, setDeparted] = useState(false);
+  const [recuPar, setRecuPar] = useState('');
+  const [dropped, setDropped] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => void loadMission(missionId).then((r) => setM(r.data)), [missionId]);
   if (!m?.commande) return <Screen title="Collecte" onBack={onBack}>{<p className="hint">Chargement…</p>}</Screen>;
+  const nature = m.commande.natureCollecte ?? 'NOUVEAUX';
+  const title = nature === 'TRANSFERT' ? 'Transfert' : nature === 'RETOUR' ? 'Retour au dépôt' : 'Collecte';
+  // objets déjà connus (installés chez le client) : on les reprend avec leur étiquette d'origine
+  const known = m.lignes.filter((l) => l.articleId && l.statutLigne === 'DEMANDEE');
+  const taken = new Set(items.map((i) => i.articleId));
+  const take = (l: MissionLine) => {
+    if (taken.has(l.articleId!)) return;
+    setItems((x) => [...x, { articleId: l.articleId!, qr: l.qrCode ?? undefined, libelle: l.libelle ?? 'Objet', photos: [] }]);
+  };
+
+  if (done && nature === 'TRANSFERT') {
+    const dest = m.commande.destination ?? null;
+    return (
+      <Screen title={title} onBack={onBack}>
+        {dropped ? (
+          <Banner kind="ok">✓ {items.length} objet(s) déposé(s) sur le site de destination.</Banner>
+        ) : (
+          <>
+            <Banner kind="ok">✓ Enlèvement signé : {items.length} objet(s) chargé(s).</Banner>
+            <section className="card">
+              <span className="hint">Site de destination</span>
+              <strong>{dest?.libelle ?? '—'}</strong>
+              <div className="row-actions">
+                <a className="btn secondary" href={navUrl(dest)} target="_blank" rel="noreferrer">
+                  Naviguer
+                </a>
+              </div>
+            </section>
+            <label>
+              Reçu par
+              <input value={recuPar} onChange={(e) => setRecuPar(e.target.value)} placeholder="Nom de la personne sur place" />
+            </label>
+            <button
+              type="button"
+              className="btn primary big"
+              disabled={recuPar.trim().length < 2}
+              onClick={async () => {
+                await enqueue({ type: 'TRANSFER_DROP', payload: { missionId, recuPar: recuPar.trim(), gps: await currentPosition(4000) } });
+                stopTracking(missionId);
+                setDropped(true);
+              }}
+            >
+              Objets déposés
+            </button>
+          </>
+        )}
+      </Screen>
+    );
+  }
 
   if (done) {
     return (
-      <Screen title="Collecte" onBack={onBack}>
+      <Screen title={title} onBack={onBack}>
         <Banner kind="ok">✓ BL d’enlèvement signé : {items.length} bien(s) pris en charge.</Banner>
       </Screen>
     );
@@ -394,9 +446,10 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
   }
 
   return (
-    <Screen title="Collecte" onBack={onBack}>
+    <Screen title={title} onBack={onBack}>
       <section className="card">
         <strong>{m.commande.adresse?.libelle}</strong>
+        {nature === 'TRANSFERT' && <span className="hint">Puis vers : {m.commande.destination?.libelle ?? '—'}</span>}
         <div className="row-actions">
           <a className="btn secondary" href={navUrl(m.commande.adresse)} target="_blank" rel="noreferrer">
             Naviguer
@@ -418,6 +471,42 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
       </section>
       {!signing ? (
         <>
+          {known.length > 0 && (
+            <>
+              <h2>
+                Objets à reprendre ({known.filter((l) => taken.has(l.articleId!)).length}/{known.length})
+              </h2>
+              <Scanner
+                expect={['A']}
+                label="Scanner l’étiquette de l’objet"
+                onScan={(qr) => {
+                  const l = known.find((x) => x.qrCode === qr);
+                  setScanError(l ? null : `${qr} ne fait pas partie de cette demande`);
+                  if (l) take(l);
+                }}
+              />
+              {scanError && <Banner kind="error">{scanError}</Banner>}
+              <ul className="list">
+                {known.map((l) => (
+                  <li key={l.id} className="pick">
+                    {l.vignette ? <img src={l.vignette} alt="" /> : <span />}
+                    <span className="row-main">
+                      <strong>{l.libelle}</strong>
+                      <small>{l.qrCode}</small>
+                    </span>
+                    {taken.has(l.articleId!) ? (
+                      <span className="hint">✓ pris</span>
+                    ) : (
+                      <button type="button" className="btn secondary small" onClick={() => take(l)}>
+                        Pris sans scan
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="hint small">Un objet introuvable sur place reste à reprendre : il sera signalé manquant à la signature.</p>
+            </>
+          )}
           <h2>Biens enlevés ({items.length})</h2>
           <ul className="list">
             {items.map((i) => (
@@ -430,9 +519,11 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
               </li>
             ))}
           </ul>
-          <button type="button" className="btn secondary big" onClick={() => setDraft({ libelle: '', photos: [] })}>
-            + Ajouter un bien
-          </button>
+          {nature !== 'TRANSFERT' && (
+            <button type="button" className="btn secondary big" onClick={() => setDraft({ libelle: '', photos: [] })}>
+              + Ajouter un bien
+            </button>
+          )}
           <button type="button" className="btn primary big" disabled={!items.length} onClick={() => setSigning(true)}>
             Faire signer le BL d’enlèvement
           </button>
@@ -464,7 +555,7 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
               };
               const empreinte = await pickupFingerprint(base);
               await enqueue({ type: 'PICKUP_SIGN', payload: { ...base, gps: await currentPosition(4000), empreinte } });
-              stopTracking(missionId);
+              if (nature !== 'TRANSFERT') stopTracking(missionId);
               setDone(true);
             }}
           >

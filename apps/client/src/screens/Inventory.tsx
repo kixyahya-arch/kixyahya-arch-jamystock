@@ -185,7 +185,7 @@ export function Inventory({ ctx, canOrder }: { ctx: Ctx; canOrder: boolean }) {
                 <span className="card-body">
                   <span className="card-title">{a.nomClient || a.libelle}</span>
                   <span className="card-meta">
-                    {[a.referenceInterne, a.categorieClient ?? a.categorie, projectName(a.projetId)].filter(Boolean).join(' · ')}
+                    {[a.referenceInterne, a.categorieClient ?? a.categorie, a.couleur, projectName(a.projetId)].filter(Boolean).join(' · ')}
                   </span>
                 </span>
               </a>

@@ -20,6 +20,7 @@ export interface Article {
   dateEntree: string | null;
   vignette: string | null;
   engage: boolean;
+  couleur?: string | null;
 }
 
 export interface Page<T> {
@@ -46,6 +47,7 @@ export interface ArticleDetail extends Record<string, unknown> {
   categorie_client: string | null;
   note_client: string | null;
   description: string | null;
+  couleur?: string | null;
   qr_code: string;
   statut: string;
   etat: string;
@@ -107,6 +109,8 @@ export interface Order {
   volumeM3: number;
   vehiculeSuggere: string | null;
   depotSansSignature?: boolean;
+  natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
+  destination?: { libelle: string } | null;
   lignes: OrderLine[];
 }
 

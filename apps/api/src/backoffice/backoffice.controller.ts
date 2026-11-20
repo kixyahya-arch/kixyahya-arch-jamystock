@@ -151,7 +151,8 @@ export class BackofficeController {
                   c.date_souhaitee AS "dateSouhaitee", c.creneau_souhaite AS "creneauSouhaite", c.date_confirmee AS "dateConfirmee",
                   c.creneau_confirme AS "creneauConfirme", c.date_contre_proposee AS "dateContreProposee", c.message_dispatcher AS "messageDispatcher",
                   c.motif_refus AS "motifRefus", c.volume_m3 AS "volumeM3", c.poids_kg AS "poidsKg", c.vehicule_suggere AS "vehiculeSuggere",
-                  c.description_collecte AS "descriptionCollecte", c.depot_sans_signature AS "depotSansSignature", c.historique_statuts AS historique, c.created_at AS "creeLe"
+                  c.description_collecte AS "descriptionCollecte", c.depot_sans_signature AS "depotSansSignature", c.historique_statuts AS historique, c.created_at AS "creeLe",
+                  c.nature_collecte AS "natureCollecte", c.destination
              FROM commande c JOIN entreprise e ON e.id = c.entreprise_id JOIN utilisateur u ON u.id = c.demandeur_id
              LEFT JOIN projet p ON p.id = c.projet_id LEFT JOIN depot d ON d.id = c.depot_id
             WHERE c.id = $1 AND c.statut <> 'BROUILLON'`,

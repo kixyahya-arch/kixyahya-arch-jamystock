@@ -96,17 +96,21 @@ export class RepriseController {
       );
       const errors: RepriseIssue[] = [...parsed.errors];
       const apercu: { line: number; client: string; action: 'CREE' | 'EXISTANT'; contact: string | null; contactAction: 'CREE' | 'EXISTANT' | 'AUCUN' }[] = [];
+      // un même client sur plusieurs lignes (plusieurs contacts) n'est créé qu'une fois
+      const dejaVus = new Set<string>();
       const plan = parsed.rows.filter((r) => {
         const ent = entreprises.get(clientKey(r.client));
+        const repete = dejaVus.has(clientKey(r.client));
         const owner = r.email ? emails.get(r.email) : undefined;
         if (r.email && owner !== undefined && (!ent || owner !== ent.id)) {
           errors.push({ line: r.line, message: `l’e-mail ${r.email} appartient déjà à un autre compte` });
           return false;
         }
+        dejaVus.add(clientKey(r.client));
         apercu.push({
           line: r.line,
           client: ent?.nom ?? r.client,
-          action: ent ? 'EXISTANT' : 'CREE',
+          action: ent || repete ? 'EXISTANT' : 'CREE',
           contact: r.email,
           contactAction: !r.email ? 'AUCUN' : owner !== undefined ? 'EXISTANT' : 'CREE',
         });
@@ -340,8 +344,8 @@ export class RepriseController {
           await tx.query(
             `INSERT INTO article (id, tenant_id, entreprise_id, projet_id, qr_code, libelle, reference_interne, categorie_id, description,
                                   longueur_m, largeur_m, hauteur_m, poids_kg, etat, statut, emplacement_courant_id, date_entree,
-                                  dernier_mouvement_le, origine_import, ancien_code, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$20,$15,$16,now(),$17,$18,$19)`,
+                                  dernier_mouvement_le, origine_import, ancien_code, created_by, couleur, emplacement_origine)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$20,$15,$16,now(),$17,$18,$19,$21,$22)`,
             [
               id,
               user.tenantId,
@@ -363,6 +367,8 @@ export class RepriseController {
               r.codeBarres,
               user.id,
               r.situation,
+              r.couleur?.slice(0, 60) ?? null,
+              r.emplacementOrigine?.slice(0, 120) ?? null,
             ],
           );
           await tx.query(

@@ -57,7 +57,8 @@ export function articleFilter(q: ArticleQuery) {
     const p = `$${params.length}`;
     where.push(`(a.recherche @@ plainto_tsquery('simple', ${p})
       OR ${p} <% (coalesce(a.libelle,'') || ' ' || coalesce(a.nom_client,'') || ' ' || coalesce(a.description,''))
-      OR c.nom ILIKE '%' || ${p} || '%')`);
+      OR c.nom ILIKE '%' || ${p} || '%'
+      OR a.ancien_code = ${p} OR a.emplacement_origine ILIKE '%' || ${p} || '%')`);
   }
   const baseWhere = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const from = `FROM article a
@@ -92,7 +93,7 @@ export class InventoryController {
       pageParams.push(q.limite);
       const rows = await tx.query(
         `SELECT a.id, a.qr_code AS "qrCode", a.libelle, a.nom_client AS "nomClient", a.reference_interne AS "referenceInterne",
-                a.categorie_client AS "categorieClient", a.statut, a.etat,
+                a.categorie_client AS "categorieClient", a.statut, a.etat, a.couleur,
                 a.projet_id AS "projetId", ent.nom AS client, c.nom AS categorie, e.chemin AS localisation, a.date_entree AS "dateEntree",
                 (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS "photoId",
                 EXISTS (SELECT 1 FROM ligne_commande lc WHERE lc.article_id = a.id AND lc.active) AS "engage"

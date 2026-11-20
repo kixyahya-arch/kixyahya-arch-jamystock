@@ -75,7 +75,8 @@ const ALLOWED: Record<MovementType, readonly ArticleStatus[]> = {
   RANGEMENT: ['EN_RECEPTION', 'ATTENDU'],
   TRANSFERT: ['EN_STOCK', 'RESERVE'],
   PREPARATION: ['RESERVE', 'EN_STOCK'],
-  CHARGEMENT: ['EN_PREPARATION'],
+  // RESTITUE : objet installé chez le client, chargé pour un transfert vers un autre site
+  CHARGEMENT: ['EN_PREPARATION', 'RESTITUE'],
   LIVRAISON: ['EN_TRANSIT'],
   RETOUR: ['EN_TRANSIT', 'RESTITUE'],
   AJUSTEMENT: ARTICLE_STATUSES,

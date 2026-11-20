@@ -49,6 +49,13 @@ const CollectionBody = z.object({
   description: z.string().min(1).max(5000),
   volumeEstimeM3: z.number().positive().optional(),
   lignes: z.array(z.object({ description: z.string().min(1), quantite: z.number().int().positive().optional() })).max(500).optional(),
+  /** Objets déjà connus, installés chez le client : RETOUR au dépôt ou TRANSFERT vers un autre site. */
+  nature: z.enum(['NOUVEAUX', 'RETOUR', 'TRANSFERT']).default('NOUVEAUX'),
+  articleIds: z.array(uuid).min(1).max(500).optional(),
+  destination: z.object({ projetId: uuid.optional(), adresse: Adresse }).optional(),
+}).superRefine((b, c) => {
+  if (b.nature !== 'NOUVEAUX' && !b.articleIds?.length) c.addIssue({ code: 'custom', path: ['articleIds'], message: 'Choisissez les objets concernés' });
+  if (b.nature === 'TRANSFERT' && !b.destination) c.addIssue({ code: 'custom', path: ['destination'], message: 'Adresse du site de destination obligatoire' });
 });
 
 @Controller()
@@ -103,7 +110,11 @@ export class OrdersController {
   @RequirePermission('collection.request')
   async collection(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const b = CollectionBody.parse(body);
-    return this.orders.requestCollection(user, { ...b, adresse: await this.geocoder.complete(b.adresse) });
+    return this.orders.requestCollection(user, {
+      ...b,
+      adresse: await this.geocoder.complete(b.adresse),
+      destination: b.destination && { ...b.destination, adresse: await this.geocoder.complete(b.destination.adresse) },
+    });
   }
 
   @Post('orders/:id/approve')

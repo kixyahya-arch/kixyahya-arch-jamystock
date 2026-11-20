@@ -93,10 +93,22 @@ export function OrderView({ id }: { id: string }) {
           <section className="panel">
             <h2>{o.type === 'RETRAIT' ? 'Retrait au dépôt' : 'Adresse et accès'}</h2>
             <dl className="facts">
+              {o.natureCollecte && o.natureCollecte !== 'NOUVEAUX' && (
+                <>
+                  <dt>Nature</dt>
+                  <dd>{o.natureCollecte === 'RETOUR' ? 'Retour au dépôt d’objets installés sur site' : 'Transfert de site à site'}</dd>
+                </>
+              )}
               {o.type !== 'RETRAIT' && (
                 <>
-                  <dt>Adresse</dt>
+                  <dt>{o.natureCollecte === 'TRANSFERT' ? 'Reprise à' : 'Adresse'}</dt>
                   <dd>{o.adresse?.libelle ?? '—'}</dd>
+                </>
+              )}
+              {o.destination && (
+                <>
+                  <dt>Destination</dt>
+                  <dd>{o.destination.libelle ?? '—'}</dd>
                 </>
               )}
               {o.depot && (
