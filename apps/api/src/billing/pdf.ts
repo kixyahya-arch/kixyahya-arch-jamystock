@@ -303,6 +303,8 @@ export interface BlPdfData {
   reserves: { article: string; type: string; commentaire: string | null }[];
   signatureSvg: string | null;
   empreinte: string | null;
+  /** LIV-05 : destinataire absent, dépôt sans signature autorisé par le client */
+  depot?: { lieu: string | null; nbPhotos: number } | null;
 }
 
 const BL_TITLE: Record<BlPdfData['type'], string> = {
@@ -316,7 +318,7 @@ const ETAT: Record<BlPdfData['articles'][number]['etat'], string> = { LIVRE: 'Li
 /** BL signé (LIV-04, LIV-06) : contenu, réserves, signature manuscrite et empreinte SHA-256 du contenu signé. */
 export async function blPdf(d: BlPdfData): Promise<Buffer> {
   const title = BL_TITLE[d.type];
-  const w = await open(`${title} ${d.numero}`, `${d.issuer.raisonSociale} · ${title} ${d.numero} · signé le ${dateFr(d.signeLe)}`);
+  const w = await open(`${title} ${d.numero}`, `${d.issuer.raisonSociale} · ${title} ${d.numero} · ${d.depot ? 'déposé sans signature' : 'signé'} le ${dateFr(d.signeLe)}`);
   const right = A4[0] - M;
   w.page.drawRectangle({ x: M, y: w.y - 4, width: 18, height: 18, color: ACCENT });
   w.text(d.issuer.raisonSociale, M + 26, w.y, { size: 15, font: w.bold });
@@ -330,7 +332,7 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
     ...(d.projet ? ([['Projet', d.projet]] as [string, string][]) : []),
     ...(d.commande ? ([['Demande', d.commande]] as [string, string][]) : []),
     ...(d.adresse ? ([['Adresse', d.adresse]] as [string, string][]) : []),
-    ['Signé le', `${dateFr(d.signeLe)} à ${d.signeLe.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}`],
+    [d.depot ? 'Déposé le' : 'Signé le', `${dateFr(d.signeLe)} à ${d.signeLe.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}`],
     ...(d.gps ? ([['Position', `${d.gps.lat.toFixed(5)}, ${d.gps.lng.toFixed(5)}${d.gps.precision ? ` (± ${Math.round(d.gps.precision)} m)` : ''}`]] as [string, string][]) : []),
   ];
   for (const [k, v] of facts) {
@@ -356,6 +358,18 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
     w.text('Réserves', M, w.y, { size: 11, font: w.bold });
     w.y -= 16;
     for (const r of d.reserves) w.para(`${r.article} : ${r.type.toLowerCase()}${r.commentaire ? ` (${r.commentaire})` : ''}`, { size: 9, gap: 2 });
+  }
+
+  if (d.depot) {
+    w.ensure(120);
+    w.y -= 14;
+    w.page.drawRectangle({ x: M, y: w.y - 52, width: right - M, height: 64, borderColor: INK, borderWidth: 1.2 });
+    w.text('NON SIGNÉ — DÉPOSÉ', M + 14, w.y - 8, { size: 13, font: w.bold });
+    w.text(`Destinataire absent : dépôt autorisé par le client pour cette commande, le ${dateFr(d.signeLe)}.`, M + 14, w.y - 26, { size: 9 });
+    w.text(`Lieu du dépôt : ${d.depot.lieu ?? '—'} · ${d.depot.nbPhotos} photo${d.depot.nbPhotos > 1 ? 's' : ''} du dépôt dans l’Espace Client.`, M + 14, w.y - 40, { size: 9, color: MUTED });
+    w.y -= 78;
+    if (d.empreinte) w.para(`Empreinte SHA-256 du contenu déposé : ${d.empreinte}`, { size: 7.5, color: MUTED });
+    return save(w, d.signeLe);
   }
 
   w.ensure(170);

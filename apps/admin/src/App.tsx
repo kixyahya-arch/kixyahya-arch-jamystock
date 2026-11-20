@@ -12,6 +12,7 @@ import { Stock } from './screens/Stock';
 import { StockArticle } from './screens/StockArticle';
 import { DepotView, Depots } from './screens/Warehouse';
 import { Emails } from './screens/Emails';
+import { Disputes } from './screens/Disputes';
 import { InvoiceView, Invoices } from './screens/Billing';
 import { Pricing, Surfaces } from './screens/Pricing';
 import { Banner, Shell } from './components/ui';
@@ -89,6 +90,8 @@ export function App() {
         <Surfaces ctx={ctx} client={route.client} />
       ) : route.name === 'pilotage' ? (
         isAdmin ? <Pilotage /> : <Banner kind="info">Le tableau de bord de pilotage est réservé au Super Admin.</Banner>
+      ) : route.name === 'litiges' ? (
+        <Disputes isAdmin={isAdmin} />
       ) : route.name === 'emails' ? (
         isAdmin ? <Emails /> : <Banner kind="info">Le suivi des e-mails est réservé au Super Admin.</Banner>
       ) : (

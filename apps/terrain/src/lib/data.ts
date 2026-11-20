@@ -11,7 +11,7 @@ export interface Bootstrap {
 
 export interface MissionSummary {
   id: string;
-  type: 'PREPARATION' | 'LIVRAISON' | 'COLLECTE' | 'RETRAIT' | 'INVENTAIRE' | 'PHOTO';
+  type: 'PREPARATION' | 'LIVRAISON' | 'COLLECTE' | 'RETRAIT' | 'INVENTAIRE' | 'PHOTO' | 'DEGROUPAGE';
   statut: string;
   ordre: number | null;
   debutPrevu: string | null;
@@ -36,6 +36,9 @@ export interface MissionLine {
   chemin: string | null;
   emplacementCode: string | null;
   vignette: string | null;
+  /** CMD-09 : palette (UM) d'où sortir le bien avant préparation */
+  umADegrouper?: string | null;
+  resteSurUm?: boolean;
 }
 
 export interface MissionDetail {
@@ -52,6 +55,8 @@ export interface MissionDetail {
     contactSite: { nom: string; telephone: string } | null;
     dateConfirmee: string | null;
     creneau: string | null;
+    /** LIV-05 : le client autorise le dépôt si personne n'est là */
+    depotSansSignature?: boolean;
   } | null;
   lignes: MissionLine[];
   /** INV-07 : bien à photographier et demande du client (missions « Photo ») */

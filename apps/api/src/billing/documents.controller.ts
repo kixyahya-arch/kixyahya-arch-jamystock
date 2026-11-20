@@ -65,9 +65,9 @@ export class DocumentsController {
         const b = await tx.query(
           `SELECT b.id, 'BL' AS type, b.numero, b.type AS "typeBl", coalesce(b.signe_le, b.recu_le) AS date, c.numero AS commande,
                   c.type AS "typeCommande", p.nom AS projet,
-                  (SELECT count(*)::int FROM reserve r WHERE r.bl_id = b.id) AS "nbReserves"
+                  (SELECT count(*)::int FROM reserve r WHERE r.bl_id = b.id) AS "nbReserves", (b.statut = 'NON_SIGNE_DEPOSE') AS "nonSigne"
              FROM bon_de_livraison b JOIN commande c ON c.id = b.commande_id LEFT JOIN projet p ON p.id = c.projet_id
-            WHERE b.statut = 'SIGNE' AND ($1::uuid IS NULL OR c.projet_id = $1)
+            WHERE b.statut IN ('SIGNE','NON_SIGNE_DEPOSE') AND ($1::uuid IS NULL OR c.projet_id = $1)
               AND ($2::date IS NULL OR (coalesce(b.signe_le, b.recu_le) AT TIME ZONE 'Europe/Paris')::date >= $2)
               AND ($3::date IS NULL OR (coalesce(b.signe_le, b.recu_le) AT TIME ZONE 'Europe/Paris')::date <= $3)`,
           [q.projet ?? null, q.du ?? null, q.au ?? null],

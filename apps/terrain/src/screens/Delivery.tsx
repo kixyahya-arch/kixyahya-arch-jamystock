@@ -17,6 +17,8 @@ interface LocalState {
   outcome: Record<string, 'LIVRE' | 'REFUSE'>;
   reserves: (ReserveInput & { photoUrls?: string[] })[];
   bl?: string;
+  /** LIV-05 : BL « non signé, déposé » */
+  depose?: boolean;
 }
 const INITIAL: LocalState = { phase: 'route', departed: false, arrived: false, outcome: {}, reserves: [] };
 
@@ -52,8 +54,12 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
 
   if (st.phase === 'done') {
     return (
-      <Screen title="BL signé" onBack={onBack}>
-        <Banner kind="ok">✓ BL signé et enregistré. Il sera envoyé au client dès le retour du réseau.</Banner>
+      <Screen title={st.depose ? 'Biens déposés' : 'BL signé'} onBack={onBack}>
+        <Banner kind="ok">
+          {st.depose
+            ? '✓ Dépôt enregistré, BL marqué « non signé, déposé ». Le client reçoit le BL et les photos dès le retour du réseau.'
+            : '✓ BL signé et enregistré. Il sera envoyé au client dès le retour du réseau.'}
+        </Banner>
         <button type="button" className="btn primary big" onClick={onBack}>
           Mission suivante
         </button>
@@ -80,7 +86,7 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
   }
 
   if (st.phase === 'sign') {
-    return <SignBl mission={m} st={st} onBack={() => save({ ...st, phase: 'unload' })} onSigned={(bl) => save({ ...st, phase: 'done', bl })} />;
+    return <SignBl mission={m} st={st} onBack={() => save({ ...st, phase: 'unload' })} onSigned={(bl, depose) => save({ ...st, phase: 'done', bl, depose })} />;
   }
 
   return (
@@ -177,7 +183,7 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
   );
 }
 
-function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st: LocalState; onBack: () => void; onSigned: (blId: string) => void }) {
+function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st: LocalState; onBack: () => void; onSigned: (blId: string, depose?: boolean) => void }) {
   const [nom, setNom] = useState('');
   const [qualite, setQualite] = useState('');
   const [svg, setSvg] = useState<string | null>(null);
@@ -188,6 +194,11 @@ function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st:
   const refuses = lines.filter((l) => st.outcome[l.articleId!] === 'REFUSE');
   const hasReserves = st.reserves.length > 0;
   const ready = nom.trim() && qualite.trim() && svg && (!hasReserves || ack);
+  // LIV-05 : seulement si le client l'a autorisé, et sans réserve ni refus (personne pour les constater)
+  const canDrop = mission.type === 'LIVRAISON' && !!mission.commande?.depotSansSignature && !hasReserves && !refuses.length;
+  const [absent, setAbsent] = useState(false);
+
+  if (absent && canDrop) return <DropOff mission={mission} livres={livres.map((l) => l.articleId!)} onBack={() => setAbsent(false)} onDone={(bl) => onSigned(bl, true)} />;
 
   return (
     <Screen title="Signature du BL" onBack={onBack}>
@@ -204,6 +215,11 @@ function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st:
           ))}
         </ul>
       </section>
+      {canDrop && (
+        <button type="button" className="btn secondary big" onClick={() => setAbsent(true)}>
+          Destinataire absent : déposer sans signature
+        </button>
+      )}
       <label>
         Nom du réceptionnaire
         <input value={nom} onChange={(e) => setNom(e.target.value)} autoComplete="off" />
@@ -242,6 +258,51 @@ function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st:
         }}
       >
         Valider le BL
+      </button>
+    </Screen>
+  );
+}
+
+/** LIV-05 : dépôt sans signature, 3 photos au moins et le lieu exact, BL « non signé, déposé ». */
+function DropOff({ mission, livres, onBack, onDone }: { mission: MissionDetail; livres: string[]; onBack: () => void; onDone: (blId: string) => void }) {
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [lieu, setLieu] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ready = photos.length >= 3 && lieu.trim().length >= 3;
+  return (
+    <Screen title="Destinataire absent" onBack={onBack}>
+      <Banner kind="info">Le client a autorisé le dépôt sans signature. Photographiez les biens déposés et l’endroit, puis indiquez précisément où ils sont.</Banner>
+      <p className="hint">{livres.length} bien(s) déposé(s) · commande {mission.commande?.numero}</p>
+      <PhotoCapture photos={photos} onChange={setPhotos} min={3} max={10} label="Photos du dépôt" />
+      <label>
+        Lieu exact du dépôt
+        <textarea rows={2} value={lieu} maxLength={300} onChange={(e) => setLieu(e.target.value)} placeholder="Ex. dans le bungalow de chantier, porte de gauche" />
+      </label>
+      <button
+        type="button"
+        className="btn primary big"
+        disabled={!ready || busy}
+        onClick={async () => {
+          setBusy(true);
+          for (const p of photos) await enqueuePhoto(p.photoId, p.blob, 0);
+          const base = {
+            missionId: mission.id,
+            blId: uuidv7(),
+            livres,
+            refuses: [],
+            reserves: [],
+            signataire: { nom: '', qualite: '' },
+            signatureSvg: '',
+            signedAt: new Date().toISOString(),
+            depot: { lieu: lieu.trim(), photoIds: photos.map((p) => p.photoId) },
+          };
+          const empreinte = await blFingerprint(base);
+          const gps = await currentPosition(4000);
+          await enqueue({ type: 'BL_SIGN', payload: { ...base, gps, empreinte } });
+          onDone(base.blId);
+        }}
+      >
+        Valider le dépôt
       </button>
     </Screen>
   );

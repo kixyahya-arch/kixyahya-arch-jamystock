@@ -42,6 +42,7 @@ const Action = z.discriminatedUnion('type', [
     type: z.literal('PHOTO_REQUEST_DONE'),
     payload: z.object({ missionId: uuid, articleQr: qr, photoIds: z.array(uuid).min(1).max(6), etat: z.enum(ARTICLE_CONDITIONS).optional(), commentaire: z.string().max(1000).optional() }),
   }),
+  z.object({ type: z.literal('UM_SPLIT'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('PICK_COMPLETE'), payload: z.object({ missionId: uuid }) }),
   z.object({ type: z.literal('LOAD'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('DEPART'), payload: z.object({ missionId: uuid }) }),
@@ -52,6 +53,7 @@ const Action = z.discriminatedUnion('type', [
       missionId: uuid, blId: uuid, livres: z.array(uuid).max(1000), refuses: z.array(uuid).max(1000),
       reserves: z.array(z.object({ articleId: uuid, type: z.enum(['CASSE', 'RAYURE', 'MANQUANT', 'REFUS', 'AUTRE']), commentaire: z.string().max(2000).optional(), photoIds: z.array(uuid).max(10).optional() })).max(1000),
       signataire, signatureSvg: z.string().max(500_000), signedAt: iso, gps: gps.optional(), empreinte: z.string().regex(/^[0-9a-f]{64}$/),
+      depot: z.object({ lieu: z.string().trim().min(3).max(300), photoIds: z.array(uuid).min(3).max(10) }).optional(),
     }),
   }),
   z.object({
@@ -104,9 +106,11 @@ export class FieldController {
   }
 
   /** Binaire d'une photo (WebP compressé sur le terminal, ≤ 400 Ko visé ; 2 Mo max accepté). */
+  // tout le personnel terrain : l'opérateur (réception, préparation) comme le chauffeur (réserves, dépôt sans signature) ;
+  // la photo doit avoir été déclarée par une action que la permission de l'auteur autorisait
   @Put('photos/:id')
-  @RequirePermission('stock.move')
   async uploadPhoto(@CurrentUser() user: AuthUser, @Param('id') id: string, @Req() req: Request) {
+    this.staffOnly(user);
     const photoId = uuid.parse(id);
     const mime = (req.headers['content-type'] ?? '').split(';')[0]!.trim();
     const ext = PHOTO_TYPES[mime];

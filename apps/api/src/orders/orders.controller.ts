@@ -36,6 +36,7 @@ const SubmitBody = z.object({
   contactSite: Contact.optional(),
   dateSouhaitee: isoDate,
   creneau: z.string().max(50).optional(),
+  depotSansSignature: z.boolean().optional(),
 });
 const CollectionBody = z.object({
   projetId: uuid.optional(),

@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { post } from '../lib/api';
+import { useEffect, useState } from 'react';
+import { del, get, post } from '../lib/api';
 import { refreshCart, removeFromCart, useCarts } from '../lib/cart';
 import { go, href } from '../lib/router';
-import { euros, dateFr, type Cart, type Ctx, type Order } from '../lib/types';
+import { euros, dateFr, type Cart, type CartTemplate, type Ctx, type Order } from '../lib/types';
 import { Banner, Pills } from '../components/ui';
 
 /** CMD-01 à CMD-05 : panier, livraison ou retrait, adresse et contraintes d'accès, estimation, envoi. */
@@ -33,6 +33,7 @@ export function CartView({ ctx, role }: { ctx: Ctx; role: string }) {
         <Pills label="Paniers par projet" value={selected![0]} onChange={setKey} options={filled.map(([k, c]) => ({ value: k, label: `${projectName(k)} · ${c.nbArticles}` }))} />
       )}
       {selected && <Checkout key={selected[0]} projetId={selected[0] || null} cart={selected[1]} role={role} />}
+      <Templates projectName={projectName} />
     </>
   );
 }
@@ -48,6 +49,7 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
   const [ascenseur, setAscenseur] = useState(false);
   const [accesPL, setAccesPL] = useState(true);
   const [consignes, setConsignes] = useState('');
+  const [sansSignature, setSansSignature] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +78,7 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
                 accesPL,
                 ...(consignes.trim() ? { consignes: consignes.trim() } : {}),
               },
+              depotSansSignature: sansSignature,
             }
           : {}),
       });
@@ -99,6 +102,9 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
               <span>
                 <a href={href({ name: 'article', id: l.articleId! })}>{l.libelle}</a>
                 {l.disponible === false && <small className="tag-alert">Plus disponible : déjà dans une autre commande</small>}
+                {!!l.umTotal && l.umTotal > 1 && (
+                  <small className="hint">Rangé sur une palette de {l.umTotal} biens : nous sortons seulement ceux de votre panier, le reste reste au dépôt.</small>
+                )}
               </span>
               <button type="button" className="link" onClick={() => void removeFromCart(l.articleId!, projetId)}>
                 Retirer
@@ -120,6 +126,7 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
             <strong>{price === null ? 'Sur devis' : price === 0 ? (delivery ? 'Inclus au forfait' : 'Gratuit') : `${euros(price)} HT`}</strong>
           </div>
         </div>
+        <SaveTemplate projetId={projetId} />
         {delivery && est.livraisonsIncluses > 0 && (
           <p className="hint">
             Votre forfait inclut {est.livraisonsIncluses} livraison{est.livraisonsIncluses > 1 ? 's' : ''} par mois ; il en reste {est.livraisonsIncluseRestantes} ce mois-ci.
@@ -191,6 +198,13 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
               Consignes (horaires du chantier, badge, stationnement…)
               <textarea rows={3} value={consignes} onChange={(e) => setConsignes(e.target.value)} />
             </label>
+            <label className="check absent">
+              <input type="checkbox" checked={sansSignature} onChange={(e) => setSansSignature(e.target.checked)} />
+              <span>
+                Dépôt sans signature si personne n’est là
+                <small className="hint">Le chauffeur dépose les biens à l’endroit indiqué dans les consignes et prend au moins 3 photos. Le bon de livraison est marqué « non signé, déposé ». Sinon, les biens reviennent au dépôt.</small>
+              </span>
+            </label>
           </fieldset>
         )}
         {blocked && <Banner kind="error">Retirez du panier les biens qui ne sont plus disponibles.</Banner>}
@@ -201,5 +215,141 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
         {needsApproval && <p className="hint">Selon vos droits sur ce projet, la demande peut d’abord passer par la validation de votre administrateur.</p>}
       </section>
     </div>
+  );
+}
+
+/** CMD-08 : enregistrer le panier comme modèle (« Kit stand de vente complet »). */
+function SaveTemplate({ projetId }: { projetId: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [nom, setNom] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await post('/me/cart-templates', { nom: nom.trim(), ...(projetId ? { projetId } : {}) });
+      setMsg({ ok: true, text: `Modèle « ${nom.trim()} » enregistré : retrouvez-le sous le panier.` });
+      setOpen(false);
+      setNom('');
+      window.dispatchEvent(new Event('jamystock:templates'));
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="save-template">
+      {open ? (
+        <form
+          className="inline-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label>
+            Nom du modèle
+            <input value={nom} onChange={(e) => setNom(e.target.value)} maxLength={80} placeholder="Ex. Kit stand de vente complet" autoFocus />
+          </label>
+          <button type="submit" className="btn primary small" disabled={busy || !nom.trim()}>
+            {busy ? '…' : 'Enregistrer'}
+          </button>
+          <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+            Annuler
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="link" onClick={() => (setOpen(true), setMsg(null))}>
+          Enregistrer ce panier comme modèle
+        </button>
+      )}
+      {msg && <Banner kind={msg.ok ? 'ok' : 'error'}>{msg.text}</Banner>}
+    </div>
+  );
+}
+
+/** CMD-08 : modèles enregistrés, à remettre au panier en un clic ; les biens indisponibles sont signalés. */
+function Templates({ projectName }: { projectName: (k: string) => string }) {
+  const [items, setItems] = useState<CartTemplate[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [report, setReport] = useState<{ kind: 'ok' | 'error' | 'info'; text: string; details?: string[] } | null>(null);
+  const load = () => get<{ items: CartTemplate[] }>('/me/cart-templates').then((r) => setItems(r.items), () => setItems([]));
+  useEffect(() => {
+    void load();
+    const on = () => void load();
+    window.addEventListener('jamystock:templates', on);
+    return () => window.removeEventListener('jamystock:templates', on);
+  }, []);
+  if (!items?.length) return null;
+
+  const use = async (m: CartTemplate) => {
+    setBusy(m.id);
+    setReport(null);
+    try {
+      const r = await post<{ ajoutes: number; indisponibles: { libelle: string; raison: string }[]; projetId: string | null }>(`/me/cart-templates/${m.id}/use`);
+      await refreshCart(r.projetId);
+      setReport({
+        kind: r.indisponibles.length ? 'info' : 'ok',
+        text: `${r.ajoutes} bien${r.ajoutes > 1 ? 's' : ''} ajouté${r.ajoutes > 1 ? 's' : ''} au panier depuis « ${m.nom} ».${r.indisponibles.length ? ` ${r.indisponibles.length} indisponible${r.indisponibles.length > 1 ? 's' : ''} :` : ''}`,
+        details: r.indisponibles.map((x) => `${x.libelle} : ${x.raison}`),
+      });
+      await load();
+    } catch (e) {
+      setReport({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const remove = async (m: CartTemplate) => {
+    setBusy(m.id);
+    try {
+      await del(`/me/cart-templates/${m.id}`);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="templates">
+      <h2>Mes modèles</h2>
+      <p className="hint">Un modèle remet en un clic le même ensemble de biens au panier.</p>
+      {report && (
+        <Banner kind={report.kind}>
+          {report.text}
+          {!!report.details?.length && (
+            <ul className="report-list">
+              {report.details.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          )}
+        </Banner>
+      )}
+      <ul className="template-list">
+        {items.map((m) => (
+          <li key={m.id}>
+            <span className="template-main">
+              <strong>{m.nom}</strong>
+              <small>
+                {projectName(m.projetId ?? '')} · {m.nbDisponibles === m.nbArticles ? `${m.nbArticles} bien${m.nbArticles > 1 ? 's' : ''}, tous disponibles` : `${m.nbDisponibles} sur ${m.nbArticles} disponibles`}
+                {m.auteur ? ` · créé par ${m.auteur}` : ''}
+              </small>
+            </span>
+            <span className="row-actions">
+              <button type="button" className="btn primary small" disabled={!!busy || m.nbDisponibles === 0} onClick={() => void use(m)}>
+                {busy === m.id ? '…' : 'Ajouter au panier'}
+              </button>
+              {m.supprimable && (
+                <button type="button" className="link" disabled={!!busy} onClick={() => void remove(m)}>
+                  Supprimer
+                </button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

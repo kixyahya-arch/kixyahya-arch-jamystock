@@ -785,3 +785,20 @@ body:has(.login) {
   font-size: 1.05rem;
   font-weight: 600;
 }
+
+/* Lot 3 : dégroupage, case cochée au scan */
+span.check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.pick.ok span.check {
+  background: var(--ink);
+  color: var(--lime);
+}

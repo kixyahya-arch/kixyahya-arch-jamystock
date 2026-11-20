@@ -82,6 +82,9 @@ export interface OrderLine {
   libelle: string | null;
   qrCode: string | null;
   disponible?: boolean;
+  /** CMD-09 : nombre de biens de l'UM (palette) où l'article est rangé */
+  umTotal?: number | null;
+  aDegrouper?: boolean;
 }
 
 export interface Order {
@@ -101,6 +104,7 @@ export interface Order {
   nbArticles: number;
   volumeM3: number;
   vehiculeSuggere: string | null;
+  depotSansSignature?: boolean;
   lignes: OrderLine[];
 }
 
@@ -226,4 +230,57 @@ export interface BillingEstimate {
   totalHtCents: number;
   tvaCents: number;
   totalTtcCents: number;
+}
+
+/** CMD-08 : modèle de panier */
+export interface CartTemplate {
+  id: string;
+  nom: string;
+  projetId: string | null;
+  projet: string | null;
+  auteur: string | null;
+  creeLe: string;
+  utiliseLe: string | null;
+  nbArticles: number;
+  nbDisponibles: number;
+  supprimable: boolean;
+}
+
+export interface PhotoLinks {
+  id: string;
+  vignette: string;
+  moyenne: string;
+  originale: string;
+}
+
+/** SUI-04 : signalement après livraison */
+export interface Dispute {
+  id: string;
+  numero: string;
+  motif: 'CASSE' | 'RAYURE' | 'MANQUANT' | 'ERREUR' | 'AUTRE';
+  description: string;
+  articles: { id: string; libelle: string }[];
+  photos: PhotoLinks[];
+  statut: 'OUVERT' | 'EN_COURS' | 'RESOLU' | 'REJETE';
+  reponse: string | null;
+  gesteCents: number | null;
+  creeLe: string;
+  traiteLe: string | null;
+  auteur: string | null;
+}
+
+export interface Delivery {
+  livraison: {
+    blId: string;
+    numero: string;
+    nonSigne: boolean;
+    le: string | null;
+    lieuDepot: string | null;
+    signataire: string | null;
+    photos: PhotoLinks[];
+    articles: { id: string; libelle: string }[];
+    signalementJusquau: string | null;
+    signalementPossible: boolean;
+  } | null;
+  litiges: Dispute[];
 }

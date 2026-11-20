@@ -105,6 +105,7 @@ const ACTION_PERMISSION: Record<FieldAction['type'], Permission> = {
   PICK: 'picking.execute',
   PICK_MISSING: 'picking.execute',
   PICK_COMPLETE: 'picking.execute',
+  UM_SPLIT: 'picking.execute',
   LOAD: 'picking.execute',
   DEPART: 'delivery.execute',
   ARRIVE: 'delivery.execute',
@@ -216,6 +217,8 @@ export class FieldService {
         return this.pickMissing(tx, ctx, action.payload);
       case 'PICK_COMPLETE':
         return this.pickComplete(tx, ctx, action.payload.missionId);
+      case 'UM_SPLIT':
+        return this.umSplit(tx, ctx, action.payload);
       case 'LOAD':
         return this.load(tx, ctx, action.payload);
       case 'DEPART':
@@ -417,10 +420,12 @@ export class FieldService {
             await tx.query<{ chemin: string | null; vignette: string | null }>(
               `SELECT l.id, l.article_id AS "articleId", l.statut_ligne AS "statutLigne", l.description_libre AS "descriptionLibre",
                       a.qr_code AS "qrCode", a.libelle, a.statut, e.chemin, e.code AS "emplacementCode",
-                      (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS vignette
+                      (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS vignette,
+                      ud.qr_code AS "umADegrouper", (l.um_a_degrouper IS NOT NULL AND a.um_courante_id = l.um_a_degrouper) AS "resteSurUm"
                  FROM ligne_commande l
                  LEFT JOIN article a ON a.id = l.article_id
                  LEFT JOIN emplacement e ON e.id = a.emplacement_courant_id
+                 LEFT JOIN unite_manutention ud ON ud.id = l.um_a_degrouper
                 WHERE l.commande_id = $1`,
               [mission.commande_id],
             )
@@ -440,6 +445,7 @@ export class FieldService {
           contactSite: order.contact_site,
           dateConfirmee: order.date_confirmee,
           creneau: order.creneau_confirme,
+          depotSansSignature: order.depot_sans_signature,
         },
         lignes: sortByPath(lignes).map((l) => ({ ...l, vignette: l.vignette ? this.files.photoUrl(user.tenantId, l.vignette, 't') : null })),
         demande: mission.type === 'PHOTO' ? await this.photoRequestInfo(tx, user, mission) : null,
@@ -451,18 +457,58 @@ export class FieldService {
     const mission = await this.mission(tx, ctx.user, p.missionId, true, ['PREPARATION']);
     const order = await this.orders.load(tx, mission.commande_id!, true);
     const article = await this.articleByQr(tx, p.articleQr);
-    const line = await tx.query<{ id: string; statut_ligne: string }>(
-      'SELECT id, statut_ligne FROM ligne_commande WHERE commande_id = $1 AND article_id = $2 FOR UPDATE',
+    const line = await tx.query<{ id: string; statut_ligne: string; um_a_degrouper: string | null }>(
+      'SELECT id, statut_ligne, um_a_degrouper FROM ligne_commande WHERE commande_id = $1 AND article_id = $2 FOR UPDATE',
       [order.id, article.id],
     );
     // PRP-02 : article hors commande = alerte bloquante
     if (!line.rows[0]) throw conflict('HORS_COMMANDE', `« ${article.libelle} » ne fait pas partie de cette commande`);
+    // CMD-09 : un article demandé seul part sans le reste de son UM ; le dégroupage passe avant
+    if (line.rows[0].um_a_degrouper && article.um_courante_id === line.rows[0].um_a_degrouper) {
+      throw conflict('DEGROUPAGE_REQUIS', `« ${article.libelle} » est encore sur son UM : faites d’abord la mission de dégroupage`);
+    }
     if (line.rows[0].statut_ligne === 'PREPAREE') return { articleId: article.id, dejaPrepare: true };
     if (order.statut === 'PLANIFIEE') await this.orders.setStatus(tx, ctx.user, order, 'EN_PREPARATION');
     await this.startMission(tx, ctx, mission);
     await this.move(tx, ctx, article, { type: 'PREPARATION', missionId: mission.id });
     await tx.query(`UPDATE ligne_commande SET statut_ligne = 'PREPAREE' WHERE id = $1`, [line.rows[0].id]);
     return { articleId: article.id, ...(await this.progress(tx, order.id, ['PREPAREE', 'CHARGEE'])) };
+  }
+
+  /**
+   * CMD-09 : l'opérateur sort de son UM un article demandé seul. L'article reste à son emplacement, hors UM ;
+   * les autres articles restent sur l'UM. La mission se termine quand tous les articles demandés sont sortis.
+   */
+  private async umSplit(tx: Tx, ctx: ActionCtx, p: { missionId: string; articleQr: string }) {
+    const mission = await this.mission(tx, ctx.user, p.missionId, true, ['DEGROUPAGE']);
+    const article = await this.articleByQr(tx, p.articleQr);
+    const line = (
+      await tx.query<{ id: string; um_a_degrouper: string | null }>(
+        'SELECT id, um_a_degrouper FROM ligne_commande WHERE commande_id = $1 AND article_id = $2 AND active',
+        [mission.commande_id, article.id],
+      )
+    ).rows[0];
+    if (!line?.um_a_degrouper) throw conflict('HORS_DEGROUPAGE', `« ${article.libelle} » n’est pas à sortir de son UM pour cette commande`);
+    await this.startMission(tx, ctx, mission);
+    if (article.um_courante_id === line.um_a_degrouper) {
+      const order = await this.orders.load(tx, mission.commande_id!);
+      await tx.query(
+        `INSERT INTO mouvement (id, tenant_id, article_id, um_id, type, de_emplacement_id, vers_emplacement_id, statut_avant, statut_apres,
+                                mission_id, auteur_id, appareil_id, horodatage_terminal, motif)
+         VALUES ($1,$2,$3,$4,'AJUSTEMENT',$5,$5,$6,$6,$7,$8,$9,$10,$11)`,
+        [uuidv7(), ctx.user.tenantId, article.id, line.um_a_degrouper, article.emplacement_courant_id, article.statut, mission.id, ctx.user.id, ctx.deviceId, ctx.at, `Dégroupage pour la commande ${order.numero ?? ''}`.trim()],
+      );
+      await tx.query('UPDATE article SET um_courante_id = NULL, dernier_mouvement_le = now() WHERE id = $1', [article.id]);
+    }
+    const left = (
+      await tx.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM ligne_commande l JOIN article a ON a.id = l.article_id
+          WHERE l.commande_id = $1 AND l.active AND l.um_a_degrouper IS NOT NULL AND a.um_courante_id = l.um_a_degrouper`,
+        [mission.commande_id],
+      )
+    ).rows[0]!.n;
+    if (left === 0) await this.finishMission(tx, ctx, mission);
+    return { articleId: article.id, restants: left, termine: left === 0 };
   }
 
   /** PRP-02 : article introuvable → anomalie avec photo de l'emplacement vide, notifiée au Dispatcher. */
@@ -563,8 +609,18 @@ export class FieldService {
     const isPickupAtDepot = await this.peekMissionType(tx, p.missionId);
     const mission = await this.mission(tx, ctx.user, p.missionId, true, ['LIVRAISON', 'RETRAIT'], isPickupAtDepot === 'RETRAIT' ? 'stock.move' : undefined);
     const order = await this.orders.load(tx, mission.commande_id!, true);
-    if (!p.signataire.nom.trim() || !p.signataire.qualite.trim()) throw unprocessable('SIGNATAIRE', 'Nom et qualité du signataire obligatoires');
-    if (!p.signatureSvg.trim()) throw unprocessable('SIGNATURE', 'Signature manquante');
+    const depot = p.depot;
+    if (depot) {
+      // LIV-05 : seulement si le client l'a autorisé pour cette commande, avec au moins 3 photos du dépôt
+      if (mission.type !== 'LIVRAISON' || !order.depot_sans_signature) {
+        throw conflict('DEPOT_NON_AUTORISE', 'Le client n’a pas autorisé la livraison sans signature : prévoyez un retour au dépôt');
+      }
+      if (depot.photoIds.length < 3) throw unprocessable('PHOTOS', 'Trois photos du dépôt au minimum');
+      if (p.refuses.length || p.reserves.length) throw unprocessable('DEPOT_SANS_REFUS', 'Sans destinataire, pas de refus ni de réserve : tous les articles sont déposés');
+    } else {
+      if (!p.signataire.nom.trim() || !p.signataire.qualite.trim()) throw unprocessable('SIGNATAIRE', 'Nom et qualité du signataire obligatoires');
+      if (!p.signatureSvg.trim()) throw unprocessable('SIGNATURE', 'Signature manquante');
+    }
     const expected = blFingerprint(p);
     if (expected !== p.empreinte) throw conflict('EMPREINTE_INVALIDE', "L'empreinte du BL ne correspond pas à son contenu");
 
@@ -594,14 +650,23 @@ export class FieldService {
     const blType = allRefused ? 'REFUS' : retrait ? 'RETRAIT' : 'LIVRAISON';
     await tx.query(
       `INSERT INTO bon_de_livraison (id, tenant_id, numero, mission_id, commande_id, entreprise_id, type, contenu, signataire_nom, signataire_qualite,
-                                     signature_svg, signe_le, latitude, longitude, precision_m, appareil_id, empreinte_sha256, statut)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'SIGNE')`,
+                                     signature_svg, signe_le, latitude, longitude, precision_m, appareil_id, empreinte_sha256, statut, lieu_depot)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [
         p.blId, ctx.user.tenantId, numero, mission.id, order.id, order.entreprise_id, blType, JSON.stringify(blContent(p)),
-        p.signataire.nom, p.signataire.qualite, p.signatureSvg, p.signedAt, p.gps?.lat ?? null, p.gps?.lng ?? null,
-        p.gps?.precision ?? null, ctx.deviceId, expected,
+        depot ? null : p.signataire.nom, depot ? null : p.signataire.qualite, depot ? null : p.signatureSvg, p.signedAt, p.gps?.lat ?? null, p.gps?.lng ?? null,
+        p.gps?.precision ?? null, ctx.deviceId, expected, depot ? 'NON_SIGNE_DEPOSE' : 'SIGNE', depot?.lieu ?? null,
       ],
     );
+    if (depot) {
+      for (const id of depot.photoIds) {
+        await tx.query(
+          `INSERT INTO photo (id, tenant_id, article_id, bl_id, cle_originale, contexte, prise_le, prise_par)
+           VALUES ($1,$2,NULL,$3,$4,'DEPOT',$5,$6) ON CONFLICT (id) DO NOTHING`,
+          [id, ctx.user.tenantId, p.blId, `${ctx.user.tenantId}/photos/${id}`, ctx.at, ctx.user.id],
+        );
+      }
+    }
     for (const r of p.reserves) {
       await tx.query('INSERT INTO reserve (id, tenant_id, bl_id, article_id, type, commentaire, photo_ids) VALUES ($1,$2,$3,$4,$5,$6,$7)', [
         uuidv7(), ctx.user.tenantId, p.blId, r.articleId, r.type, r.commentaire ?? null, r.photoIds ?? [],
@@ -630,13 +695,13 @@ export class FieldService {
     await this.finishMission(tx, ctx, mission);
     if (!retrait && !allRefused) await this.recordDeliveryService(tx, ctx, order, mission.id);
     // le PDF scellé (PDF/A + cachet serveur) est produit par le worker documents (phase D)
-    await this.notifyClient(tx, ctx.user, order, 'LIVRAISON_EFFECTUEE', { blId: p.blId, numero });
+    await this.notifyClient(tx, ctx.user, order, 'LIVRAISON_EFFECTUEE', { blId: p.blId, numero, ...(depot ? { nonSigne: true, lieuDepot: depot.lieu } : {}) });
     await this.audit.record(tx, ctx.user, {
       action: 'BL_SIGNE',
       objet: 'bon_de_livraison',
       objetId: p.blId,
       entrepriseId: order.entreprise_id,
-      apres: { numero, empreinte: expected, livres: p.livres.length, refuses: p.refuses.length, reserves: p.reserves.length },
+      apres: { numero, empreinte: expected, livres: p.livres.length, refuses: p.refuses.length, reserves: p.reserves.length, ...(depot ? { nonSigneDepose: depot.lieu } : {}) },
     });
     return { blId: p.blId, numero, empreinte: expected, statutCommande: next };
   }

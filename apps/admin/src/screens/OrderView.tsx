@@ -137,6 +137,12 @@ export function OrderView({ id }: { id: string }) {
                   <dd>{c.consignes}</dd>
                 </>
               )}
+              {o.type === 'LIVRAISON' && (
+                <>
+                  <dt>Si personne n’est là</dt>
+                  <dd>{o.depotSansSignature ? 'Dépôt sans signature autorisé (3 photos au moins)' : 'Retour au dépôt'}</dd>
+                </>
+              )}
             </dl>
           </section>
 

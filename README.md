@@ -122,6 +122,9 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | PUT | `/api/v1/articles/:id/annotation` | clients | INV-06 |
 | POST / GET | `/api/v1/articles/:id/requests` | clients | INV-07 |
 | GET | `/api/v1/me/billing/estimate` | B2B Admin, particulier | ADM-02 |
+| GET / POST / DELETE | `/api/v1/me/cart-templates`, POST `/me/cart-templates/:id/use` | clients | CMD-08 |
+| POST / GET | `/api/v1/me/disputes`, PUT `/me/disputes/:id/photos/:photoId`, GET `/me/disputes/delivery/:commandeId` | clients | SUI-04, LIV-05 |
+| GET / POST | `/api/v1/bo/disputes`, `/bo/disputes/:id`, POST `/bo/disputes/:id/resolve` | Dispatcher, Super Admin | SUI-04 |
 | GET | `/api/v1/files/photos/:id/:taille?t&e&s` (lien signé 15 min, sans jeton) | public signé | §7.3 |
 | POST | `/api/v1/orders/:id/submit` | clients | CMD-02 à 05 |
 | POST | `/api/v1/collections` | clients | CMD-06 |
@@ -151,10 +154,11 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `ARTICLE_STORE`, `TRANSFER` (contrôle zone, surface et charge, forçage avec motif) | Opérateur | REC-03, RG-STK-01 |
 | `UM_CREATE`, `UM_ADD`, `UM_STORE` | Opérateur | REC-04 |
 | `RECEPTION_CLOSE` (collecte → STOCKEE, email récapitulatif) | Opérateur | §4.1 |
+| `UM_SPLIT` (mission Dégroupage : le bien commandé quitte sa palette) | Opérateur | CMD-09 |
 | `PICK`, `PICK_MISSING`, `PICK_COMPLETE` | Opérateur | PRP-01, PRP-02 |
 | `LOAD` (statut En transit, départ bloqué si incomplet) | Opérateur | PRP-03 |
 | `DEPART`, `ARRIVE` (contrôle GPS à 500 m) | Chauffeur | LIV-01, §4.3 |
-| `BL_SIGN` (empreinte SHA-256 vérifiée, réserves, refus, retrait au comptoir) | Chauffeur, Opérateur | LIV-03, LIV-04 |
+| `BL_SIGN` (empreinte SHA-256 vérifiée, réserves, refus, retrait au comptoir ; `depot` : non signé, déposé, 3 photos au moins) | Chauffeur, Opérateur | LIV-03, LIV-04, LIV-05 |
 | `PICKUP_SIGN` (BL d'enlèvement, articles ATTENDU) | Chauffeur | LIV-06 |
 | `RETURN` (article refusé de retour au dépôt) | Opérateur | §4.3 |
 | `PHOTO_REQUEST_DONE` (bien scanné, 1 à 6 photos, état constaté, réponse au client) | Opérateur | INV-07 |
@@ -227,6 +231,20 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
   - Estimation de la prochaine facture (ADM-02) : dans « Mes documents », le titulaire du compte voit le montant estimé
     du mois en cours, à partir des relevés de surface déjà faits, de la surface actuelle pour les jours restants et des
     prestations déjà réalisées.
+- **G. Commandes et livraison** (fait) :
+  - Modèles de panier (CMD-08) : le client enregistre son panier sous un nom (« Kit stand de vente complet ») puis le
+    remet au panier en un clic. Les biens qui ne sont plus disponibles sont listés avec la raison et laissés de côté.
+  - Retrait partiel d'une palette (CMD-09) : quand une commande ne prend qu'une partie des biens rangés sur une palette,
+    une mission « Dégroupage » est planifiée la veille, avant la préparation. L'opérateur scanne les seuls biens
+    commandés, qui quittent la palette ; le reste ne bouge pas et le mouvement est tracé. Le prélèvement d'un bien encore
+    sur sa palette est refusé tant que le dégroupage n'est pas fait.
+  - Dépôt sans signature (LIV-05) : à la commande, le client peut autoriser le dépôt si personne n'est là. Le chauffeur
+    prend alors au moins 3 photos et note le lieu exact ; le BL est marqué « non signé, déposé », sans réserve possible,
+    et le client reçoit le BL et les photos.
+  - Litiges après livraison (SUI-04) : pendant 48 heures après la remise, le client signale un problème (casse, rayure,
+    manquant, erreur) avec les biens concernés et jusqu'à 6 photos. Le litige est lié au BL ; le Back-Office le prend en
+    charge, le résout ou le rejette avec une réponse envoyée au client. Le Super Admin peut accorder un geste commercial,
+    déduit de la prochaine facture.
 
 ### Variables d'environnement des services externes
 
