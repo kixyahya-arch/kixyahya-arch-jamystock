@@ -19,7 +19,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 export function demoPhotoSvg(libelle: string, icon: string, seed: number): string {
   const tint = TINTS[seed % TINTS.length]!;
   const picto = PICTOS[icon] ?? PICTOS.box!;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="${tint}"/><g fill="#000" stroke="#000">${picto}</g><text x="200" y="288" font-family="system-ui,sans-serif" font-size="15" text-anchor="middle" fill="#000" opacity=".55">${esc(libelle)}</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="${tint}"/><g fill="#0a2a43" stroke="#0a2a43" opacity=".82">${picto}</g><text x="200" y="288" font-family="system-ui,sans-serif" font-size="15" text-anchor="middle" fill="#0a2a43" opacity=".6">${esc(libelle)}</text></svg>`;
 }
 
 export async function writeDemoPhoto(storageDir: string, key: string, svg: string): Promise<void> {

@@ -6,6 +6,7 @@ import { demoPhotoSvg, writeDemoPhoto } from './demo-photos.js';
 import { DEMO_PASSWORD, seed } from './seed.js';
 import { seedDemoOrders } from './demo-orders.js';
 import { seedDemoBilling } from './demo-billing.js';
+import { seedDemoOnSite } from './demo-onsite.js';
 import { hashPassword } from '../auth/auth.service.js';
 
 /**
@@ -62,6 +63,8 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
     if (demo) log(`${demo} demande(s) de démonstration créée(s) pour le Back-Office`);
     const factures = await seedDemoBilling(url, env.STORAGE_DIR ?? '.storage');
     if (factures) log(`${factures} facture(s) de démonstration créée(s)`);
+    const surSite = await seedDemoOnSite(url, env.STORAGE_DIR ?? '.storage');
+    if (surSite) log(`${surSite} objet(s) de démonstration installé(s) chez le client`);
   }
 }
 
