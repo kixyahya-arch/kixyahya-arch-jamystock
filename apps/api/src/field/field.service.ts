@@ -34,6 +34,7 @@ import { OrdersService, type OrderRow } from '../orders/orders.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { FilesService } from '../files/files.service.js';
 import { usageColumns } from '../warehouse/occupancy.js';
+import { TrackingService } from '../flux/tracking.service.js';
 
 /** Contexte d'exécution d'une action terrain. */
 interface ActionCtx {
@@ -127,6 +128,7 @@ export class FieldService {
     @Inject(OrdersService) private readonly orders: OrdersService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(FilesService) private readonly files: FilesService,
+    @Inject(TrackingService) private readonly tracking: TrackingService,
   ) {}
 
   // =====================================================================================
@@ -409,6 +411,35 @@ export class FieldService {
     await this.move(tx, ctx, article, { type: 'RETOUR', toLocationId: quai, motif: p.motif });
     await tx.query(`UPDATE ligne_commande SET active = false WHERE article_id = $1 AND active`, [article.id]);
     return { articleId: article.id, statut: 'EN_RECEPTION' };
+  }
+
+  /**
+   * FLX-05 : positions du terminal. Acceptées seulement pendant une livraison ou une collecte en cours
+   * (RGPD : pas de suivi hors mission) ; sinon le terminal est prié d'arrêter d'en envoyer.
+   */
+  async recordPositions(user: AuthUser, points: { lat: number; lng: number; precision?: number; vitesseKmh?: number; at: string }[], now = new Date()) {
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const m = (
+        await tx.query<{ id: string; debut_reel: Date }>(
+          `SELECT id, debut_reel FROM mission WHERE assigne_a = $1 AND statut = 'EN_COURS' AND type IN ('LIVRAISON', 'COLLECTE')
+             AND donnees->>'arriveLe' IS NULL ORDER BY debut_reel DESC NULLS LAST LIMIT 1`,
+          [user.id],
+        )
+      ).rows[0];
+      if (!m) return { acceptees: 0, actif: false };
+      const from = (m.debut_reel?.getTime() ?? now.getTime()) - 60_000;
+      const keep = points.filter((p) => {
+        const t = Date.parse(p.at);
+        return Number.isFinite(t) && t >= from && t <= now.getTime() + 2 * 60_000;
+      });
+      for (const p of keep) {
+        await tx.query(
+          `INSERT INTO position_chauffeur (id, tenant_id, utilisateur_id, mission_id, lat, lng, precision_m, vitesse_kmh, horodatage) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [uuidv7(), user.tenantId, user.id, m.id, p.lat, p.lng, p.precision ?? null, p.vitesseKmh ?? null, p.at],
+        );
+      }
+      return { acceptees: keep.length, actif: true };
+    });
   }
 
   // =====================================================================================
@@ -795,11 +826,26 @@ export class FieldService {
       );
       if (notLoaded.rows[0]!.n > 0) throw conflict('CHARGEMENT_INCOMPLET', `${notLoaded.rows[0]!.n} article(s) préparé(s) non chargé(s)`);
       await this.orders.setStatus(tx, ctx.user, order, 'EN_LIVRAISON');
-      // LIV-02 (SMS + lien de suivi) arrive en phase 1.5 ; la notification est déjà mise en file
-      await this.notifyClient(tx, ctx.user, order, 'CHAUFFEUR_EN_ROUTE', {});
     }
-    await this.startMission(tx, ctx, mission, { enRouteLe: ctx.at.toISOString() });
-    return { missionId, statut: 'EN_COURS' };
+    // LIV-02 / SUI-02 : lien de suivi public (48 h) et heure d'arrivée estimée, envoyés au client
+    const first = !(mission.donnees as { suivi?: unknown }).suivi;
+    const jeton = (mission.donnees as { suivi?: { jeton: string } }).suivi?.jeton ?? this.tracking.token(ctx.user.tenantId, mission.id, ctx.at);
+    await this.startMission(tx, ctx, mission, { enRouteLe: ctx.at.toISOString(), suivi: { jeton, expireLe: this.tracking.parse(jeton, 0).expireLe.toISOString() } });
+    if (first && mission.commande_id) {
+      const order = await this.orders.load(tx, mission.commande_id);
+      const state = await this.tracking.state(tx, mission.id, ctx.at);
+      const vars = { suivi: jeton, eta: state?.eta ?? null, type: mission.type, chauffeur: state?.chauffeur ?? null, arretsAvant: state?.arretsAvant ?? 0 };
+      await this.notifyClient(tx, ctx.user, order, 'CHAUFFEUR_EN_ROUTE', vars);
+      // SMS au contact sur place : mis en file, envoyé dès qu'un fournisseur SMS est configuré
+      const tel = (order as unknown as { contact_site?: { telephone?: string; nom?: string } }).contact_site?.telephone;
+      if (tel) {
+        await tx.query(
+          `INSERT INTO notification (id, tenant_id, destinataire_id, canal, modele, variables) VALUES ($1,$2,$3,'SMS','CHAUFFEUR_EN_ROUTE',$4)`,
+          [uuidv7(), ctx.user.tenantId, order.demandeur_id, JSON.stringify({ commandeId: order.id, numero: order.numero, telephone: tel, url: this.tracking.url(jeton), ...vars })],
+        );
+      }
+    }
+    return { missionId, statut: 'EN_COURS', suivi: this.tracking.url(jeton) };
   }
 
   private async arrive(tx: Tx, ctx: ActionCtx, p: { missionId: string; gps?: { lat: number; lng: number; precision?: number } }) {

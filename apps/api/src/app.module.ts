@@ -38,13 +38,19 @@ import { ArticleClientController, ClientInventoryController, InventoryExportServ
 import { BoDisputesController, CartTemplatesController, DisputesController } from './orders/after-sales.controller.js';
 import { PilotageController } from './pilotage/pilotage.controller.js';
 
+import { ToursController, FleetMapController } from './flux/tours.controller.js';
+import { PublicTrackingController } from './flux/tracking.controller.js';
+import { TrackingService } from './flux/tracking.service.js';
+import { GeocoderService } from './flux/geocoder.service.js';
+import { EmailTemplatesController } from './notifications/email-templates.controller.js';
+
 /** Monolithe modulaire (§7.1) : un module Nest par domaine métier au fil des phases. */
 @Module({})
 export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },
@@ -60,6 +66,8 @@ export class AppModule {
         PaymentsService,
         DunningService,
         InventoryExportService,
+        TrackingService,
+        GeocoderService,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
       ],

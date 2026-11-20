@@ -83,10 +83,10 @@ export class MissionsController {
       const missions = (
         await tx.query(
           `SELECT m.id, m.type, m.statut, m.ordre, m.debut_prevu AS "debutPrevu", c.id AS "commandeId", coalesce(c.numero, m.donnees->>'numero') AS numero, c.adresse,
-                  m.donnees->>'zone' AS zone,
+                  m.donnees->>'zone' AS zone, t.numero AS tournee, m.tournee_id AS "tourneeId",
                   c.contraintes_acces AS "contraintesAcces", c.contact_site AS "contactSite", c.creneau_confirme AS creneau,
                   coalesce(pa.nom_client, pa.libelle) AS "articleLibelle"
-             FROM mission m LEFT JOIN commande c ON c.id = m.commande_id
+             FROM mission m LEFT JOIN commande c ON c.id = m.commande_id LEFT JOIN tournee t ON t.id = m.tournee_id
              LEFT JOIN article pa ON m.type = 'PHOTO' AND pa.id = (m.donnees->>'articleId')::uuid
             WHERE m.assigne_a = $1 AND m.statut IN ('AFFECTEE','EN_COURS') AND ($2::date IS NULL OR m.debut_prevu::date <= $2)
             ORDER BY m.ordre NULLS LAST, m.debut_prevu`,

@@ -3,7 +3,7 @@ import { uuidv7 } from '@jamystock/domain';
 import { CONFIG, DATABASE } from '../common/tokens.js';
 import type { AppConfig } from '../config.js';
 import type { Database, Tx } from '../db/database.js';
-import { renderEmail, TRANSACTIONAL, type RenderedEmail } from './templates.js';
+import { renderEmail, TRANSACTIONAL, type EmailOverride, type RenderedEmail } from './templates.js';
 
 /** Délais entre deux tentatives d'envoi (puis échec définitif). */
 const RETRY_MINUTES = [1, 5, 30];
@@ -90,6 +90,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnApplicati
             ORDER BY n.created_at LIMIT 20 FOR UPDATE OF n SKIP LOCKED`,
           [at],
         );
+        const overrides = rows.rowCount ? await this.overrides(tx) : new Map<string, EmailOverride>();
         for (const n of rows.rows) {
           const to = n.destinataire_adresse ?? n.email;
           const skip =
@@ -97,7 +98,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnApplicati
             n.statut_utilisateur === 'DESACTIVE' ? 'Utilisateur désactivé' :
             !TRANSACTIONAL.has(n.modele) && n.preferences?.[n.modele] === false ? 'Désactivé dans les préférences' :
             null;
-          const mail = skip ? null : renderEmail(n.modele, n.variables, { publicUrl: this.config.publicUrl, destinataire: n.nom });
+          const mail = skip ? null : renderEmail(n.modele, n.variables, { publicUrl: this.config.publicUrl, destinataire: n.nom }, overrides.get(n.modele));
           if (skip || !mail) {
             await tx.query(`UPDATE notification SET statut = 'IGNOREE', erreur = $2 WHERE id = $1`, [n.id, skip ?? 'Pas de modèle e-mail']);
             out.ignores++;
@@ -147,7 +148,13 @@ export class NotificationsService implements OnApplicationBootstrap, OnApplicati
   }
 
   /** Aperçu d'un e-mail déjà en file (Back-Office). */
-  preview(modele: string, variables: Record<string, unknown>, nom: string | null) {
-    return renderEmail(modele, variables, { publicUrl: this.config.publicUrl, destinataire: nom });
+  preview(modele: string, variables: Record<string, unknown>, nom: string | null, override?: EmailOverride | null) {
+    return renderEmail(modele, variables, { publicUrl: this.config.publicUrl, destinataire: nom }, override);
+  }
+
+  /** Textes personnalisés au Back-Office (§6.3), par modèle. */
+  async overrides(tx: Tx): Promise<Map<string, EmailOverride>> {
+    const r = await tx.query<EmailOverride & { modele: string }>('SELECT modele, sujet, corps, bouton FROM modele_email');
+    return new Map(r.rows.map(({ modele, ...o }) => [modele, o]));
   }
 }

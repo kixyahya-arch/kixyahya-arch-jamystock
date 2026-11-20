@@ -81,6 +81,13 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
       console.error('Relances :', (e as Error).message);
       return null;
     });
-    return { instantanes, brouillons, emises, prelevements, relances };
+    // FLX-05 (RGPD) : les positions des chauffeurs ne sont gardées que 30 jours
+    const positionsPurgees = await this.db
+      .tx(systemCtx(tenantId), async (tx) => (await tx.query(`DELETE FROM position_chauffeur WHERE horodatage < $1::timestamptz - interval '30 days'`, [at])).rowCount ?? 0)
+      .catch((e) => {
+        console.error('Purge des positions :', (e as Error).message);
+        return null;
+      });
+    return { instantanes, brouillons, emises, prelevements, relances, positionsPurgees };
   }
 }

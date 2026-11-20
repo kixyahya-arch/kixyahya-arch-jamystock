@@ -84,3 +84,37 @@ export function haversineMeters(a: { lat: number; lng: number }, b: { lat: numbe
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+/** Hypothèses de l'heure d'arrivée estimée (SUI-02, LIV-02) : trajet urbain, détour routier, temps passé par arrêt. */
+export const ETA_DEFAULTS = { vitesseKmh: 30, detour: 1.35, arretMinutes: 20, arrondiMinutes: 5 } as const;
+
+/**
+ * Heure d'arrivée estimée chez un client : depuis la dernière position du chauffeur (ou le dépôt),
+ * en passant d'abord par les arrêts de la tournée qui le précèdent et ne sont pas encore faits.
+ * Arrondie aux 5 minutes ; `null` si une coordonnée manque (adresse non géocodée).
+ */
+export function estimateArrival(
+  now: Date,
+  from: GeoPoint | null,
+  stopsBefore: (GeoPoint | null)[],
+  destination: GeoPoint | null,
+  opts: { vitesseKmh?: number; detour?: number; arretMinutes?: number; arrondiMinutes?: number } = {},
+): Date | null {
+  const o = { ...ETA_DEFAULTS, ...opts };
+  if (!from || !destination || stopsBefore.some((s) => !s)) return null;
+  const legMinutes = (a: GeoPoint, b: GeoPoint) => ((haversineMeters(a, b) / 1000) * o.detour * 60) / o.vitesseKmh;
+  let minutes = 0;
+  let at = from;
+  for (const s of stopsBefore as GeoPoint[]) {
+    minutes += legMinutes(at, s) + o.arretMinutes;
+    at = s;
+  }
+  minutes += legMinutes(at, destination);
+  const step = o.arrondiMinutes * 60_000;
+  return new Date(Math.ceil((now.getTime() + minutes * 60_000) / step) * step);
+}
