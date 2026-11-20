@@ -1225,7 +1225,7 @@ label.inline {
   justify-items: end;
   gap: 4px;
 }
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .doc-list li {
     grid-template-columns: 18px 1fr auto;
   }
