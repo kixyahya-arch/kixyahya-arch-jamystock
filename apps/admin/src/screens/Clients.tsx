@@ -38,9 +38,14 @@ export function Clients({ canCreate }: { canCreate: boolean }) {
           <h1>Clients</h1>
         </div>
         {canCreate && (
-          <a className="btn primary" href={href({ name: 'nouveau-client' })}>
-            Ouvrir un compte client
-          </a>
+          <div className="row-actions">
+            <a className="btn" href={href({ name: 'reprise' })}>
+              Reprise des données
+            </a>
+            <a className="btn primary" href={href({ name: 'nouveau-client' })}>
+              Ouvrir un compte client
+            </a>
+          </div>
         )}
       </section>
       <section className="toolbar">
@@ -457,7 +462,7 @@ export function NewClient() {
             <input value={form.nom} onChange={set('nom')} required minLength={2} />
           </label>
           {type === 'B2B' && (
-            <div className="row">
+            <div className="row-actions">
               <label>
                 SIRET
                 <input value={form.siret} onChange={set('siret')} required inputMode="numeric" placeholder="14 chiffres" />
@@ -485,7 +490,7 @@ export function NewClient() {
             Nom
             <input value={form.contactNom} onChange={set('contactNom')} required minLength={2} />
           </label>
-          <div className="row">
+          <div className="row-actions">
             <label>
               Email
               <input type="email" value={form.contactEmail} onChange={set('contactEmail')} required />
@@ -510,7 +515,7 @@ export function NewClient() {
           </label>
           {form.forfait && (
             <>
-              <div className="row">
+              <div className="row-actions">
                 <label>
                   Surface incluse (m²)
                   <input inputMode="decimal" value={form.m2} onChange={set('m2')} required />
@@ -520,7 +525,7 @@ export function NewClient() {
                   <input inputMode="decimal" value={form.mensuel} onChange={set('mensuel')} required />
                 </label>
               </div>
-              <div className="row">
+              <div className="row-actions">
                 <label>
                   Dépassement (€ HT / m²)
                   <input inputMode="decimal" value={form.depassement} onChange={set('depassement')} required />

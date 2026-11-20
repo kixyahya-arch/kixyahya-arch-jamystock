@@ -22,6 +22,8 @@ export interface AppConfig {
   geocoder: { mode: 'ban' | 'off'; baseUrl: string };
   /** FLX-05 : fond de carte du Back-Office et de la page de suivi (tuiles XYZ). */
   mapTilesUrl: string;
+  /** Reprise de données : autorise le téléchargement de photos depuis une adresse locale ou privée (tests seulement). */
+  reprisePhotosLocal: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -52,5 +54,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       baseUrl: (env.GEOCODER_URL || 'https://api-adresse.data.gouv.fr').replace(/\/+$/, ''),
     },
     mapTilesUrl: env.MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    reprisePhotosLocal: env.REPRISE_PHOTOS_LOCAL === 'on',
   };
 }

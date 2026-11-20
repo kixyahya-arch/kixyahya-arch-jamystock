@@ -19,6 +19,7 @@ import { Disputes } from './screens/Disputes';
 import { DepotPlan, Inventories, InventoryView } from './screens/WarehousePlan';
 import { InvoiceView, Invoices } from './screens/Billing';
 import { Pricing, Surfaces } from './screens/Pricing';
+import { Reprise } from './screens/Reprise';
 import { Banner, Shell } from './components/ui';
 
 /** Le Back-Office est réservé à l'encadrement du dépôt ; opérateurs et chauffeurs utilisent l'app terrain. */
@@ -110,6 +111,8 @@ export function App() {
         isAdmin ? <EmailTemplates /> : <Banner kind="info">Les modèles d’e-mails sont réservés au Super Admin.</Banner>
       ) : route.name === 'modele-email' ? (
         isAdmin ? <EmailTemplateEditor id={route.id} /> : <Banner kind="info">Les modèles d’e-mails sont réservés au Super Admin.</Banner>
+      ) : route.name === 'reprise' ? (
+        isAdmin ? <Reprise /> : <Banner kind="info">La reprise des données est réservée au Super Admin.</Banner>
       ) : route.name === 'emails' ? (
         isAdmin ? <Emails /> : <Banner kind="info">Le suivi des e-mails est réservé au Super Admin.</Banner>
       ) : (
