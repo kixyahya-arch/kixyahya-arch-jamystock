@@ -21,7 +21,11 @@ export type Route =
   | { name: 'litiges' }
   | { name: 'plan-depot'; id: string }
   | { name: 'inventaires' }
-  | { name: 'inventaire'; id: string };
+  | { name: 'inventaire'; id: string }
+  | { name: 'tournees'; date?: string }
+  | { name: 'carte' }
+  | { name: 'modeles-email' }
+  | { name: 'modele-email'; id: string };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/');
@@ -41,6 +45,10 @@ export function parse(hash: string): Route {
   if (a === 'facturation' && b === 'surfaces') return { name: 'surfaces', client: hash.split('/')[3] || undefined };
   if (a === 'facturation' && b) return { name: 'facture', id: b };
   if (a === 'facturation') return { name: 'facturation' };
+  if (a === 'tournees') return b && /^\d{4}-\d{2}-\d{2}$/.test(b) ? { name: 'tournees', date: b } : { name: 'tournees' };
+  if (a === 'carte') return { name: 'carte' };
+  if (a === 'emails' && b === 'modeles' && hash.split('/')[3]) return { name: 'modele-email', id: hash.split('/')[3]! };
+  if (a === 'emails' && b === 'modeles') return { name: 'modeles-email' };
   if (a === 'emails') return { name: 'emails' };
   if (a === 'pilotage') return { name: 'pilotage' };
   if (a === 'litiges') return { name: 'litiges' };
@@ -69,6 +77,12 @@ export function href(r: Route): string {
       return `#/inventaires/${r.id}`;
     case 'facture':
       return `#/facturation/${r.id}`;
+    case 'tournees':
+      return r.date ? `#/tournees/${r.date}` : '#/tournees';
+    case 'modeles-email':
+      return '#/emails/modeles';
+    case 'modele-email':
+      return `#/emails/modeles/${r.id}`;
     case 'tarifs':
       return '#/facturation/tarifs';
     case 'surfaces':

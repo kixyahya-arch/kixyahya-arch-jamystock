@@ -45,7 +45,7 @@ export class NotificationsController {
       );
       const n = r.rows[0];
       if (!n) throw notFound('E-mail');
-      const mail = this.notifications.preview(n.modele, n.variables, n.nom);
+      const mail = this.notifications.preview(n.modele, n.variables, n.nom, (await this.notifications.overrides(tx)).get(n.modele));
       if (!mail) throw notFound('Modèle');
       return mail;
     });

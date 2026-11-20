@@ -12,6 +12,9 @@ import { Stock } from './screens/Stock';
 import { StockArticle } from './screens/StockArticle';
 import { DepotView, Depots } from './screens/Warehouse';
 import { Emails } from './screens/Emails';
+import { EmailTemplateEditor, EmailTemplates } from './screens/EmailTemplates';
+import { ToursView } from './screens/Tours';
+import { FleetMap } from './screens/FleetMap';
 import { Disputes } from './screens/Disputes';
 import { DepotPlan, Inventories, InventoryView } from './screens/WarehousePlan';
 import { InvoiceView, Invoices } from './screens/Billing';
@@ -99,6 +102,14 @@ export function App() {
         isAdmin ? <InventoryView id={route.id} /> : <Banner kind="info">Les inventaires sont réservés au Super Admin.</Banner>
       ) : route.name === 'litiges' ? (
         <Disputes isAdmin={isAdmin} />
+      ) : route.name === 'tournees' ? (
+        <ToursView date={route.date ?? new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' })} />
+      ) : route.name === 'carte' ? (
+        <FleetMap />
+      ) : route.name === 'modeles-email' ? (
+        isAdmin ? <EmailTemplates /> : <Banner kind="info">Les modèles d’e-mails sont réservés au Super Admin.</Banner>
+      ) : route.name === 'modele-email' ? (
+        isAdmin ? <EmailTemplateEditor id={route.id} /> : <Banner kind="info">Les modèles d’e-mails sont réservés au Super Admin.</Banner>
       ) : route.name === 'emails' ? (
         isAdmin ? <Emails /> : <Banner kind="info">Le suivi des e-mails est réservé au Super Admin.</Banner>
       ) : (

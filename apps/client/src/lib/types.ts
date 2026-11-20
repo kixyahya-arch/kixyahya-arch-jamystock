@@ -89,6 +89,8 @@ export interface OrderLine {
 
 export interface Order {
   id: string;
+  /** SUI-02 : lien de suivi du chauffeur, valable 48 h après son départ */
+  suivi?: { jeton: string; expireLe: string } | null;
   numero: string | null;
   type: 'LIVRAISON' | 'RETRAIT' | 'COLLECTE';
   statut: string;

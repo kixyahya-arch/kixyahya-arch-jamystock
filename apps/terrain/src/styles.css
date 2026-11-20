@@ -881,3 +881,9 @@ span.check {
   font-size: 1.1rem;
   text-align: center;
 }
+
+/* Lot 5 · tournée */
+.row-main small.tour-line {
+  font-weight: 700;
+  color: var(--ink);
+}

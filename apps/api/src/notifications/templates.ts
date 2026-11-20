@@ -33,13 +33,23 @@ export const OPTIONAL_EVENTS: { modele: string; libelle: string }[] = [
 const esc = (v: unknown) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
+/** Dans un modèle de texte, les variables restent en {{repère}} (édition au Back-Office). */
+const isMark = (v: unknown): v is string => typeof v === 'string' && v.startsWith('{{');
+
 const euros = (cents: unknown) =>
-  typeof cents === 'number' ? `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`.replace(/ /g, ' ') : '';
+  isMark(cents) ? cents : typeof cents === 'number' ? `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`.replace(/ /g, ' ') : '';
 
 const dateFr = (v: unknown) => {
   if (!v) return '';
+  if (isMark(v)) return v;
   const d = new Date(typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T12:00:00Z` : String(v));
   return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+};
+
+const heure = (v: unknown) => {
+  if (isMark(v)) return v;
+  const d = new Date(String(v));
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
 };
 
 interface Spec {
@@ -74,8 +84,20 @@ function spec(modele: string, v: Vars): Spec | null {
       return { subject: `Créneau confirmé : ${v.numero ?? ''}`.trim(), lines: [`Le créneau de ${num} est confirmé${v.date ? ` pour le ${dateFr(v.date)}` : ''}.`], action: { label: 'Voir le détail', path: order } };
     case 'CRENEAU_CONTRE_PROPOSE':
       return { subject: `Nouveau créneau proposé : ${v.numero ?? ''}`.trim(), lines: [`Le créneau demandé pour ${num} n’est pas disponible : un autre créneau vous est proposé${v.date ? ` (le ${dateFr(v.date)})` : ''}.`], action: { label: 'Voir la proposition', path: order } };
-    case 'CHAUFFEUR_EN_ROUTE':
-      return { subject: `Votre livraison est en route : ${v.numero ?? ''}`.trim(), lines: [`Le chauffeur est parti avec ${num}.`], action: { label: 'Suivre la commande', path: order } };
+    case 'CHAUFFEUR_EN_ROUTE': {
+      const collecte = v.type === 'COLLECTE';
+      return {
+        subject: collecte ? `Le chauffeur arrive pour votre collecte : ${v.numero ?? ''}`.trim() : `Votre livraison est en route : ${v.numero ?? ''}`.trim(),
+        lines: [
+          collecte
+            ? `${v.chauffeur ? `${v.chauffeur}, votre chauffeur,` : 'Le chauffeur'} est en route pour enlever les biens de ${num}.`
+            : `${v.chauffeur ? `${v.chauffeur}, votre chauffeur,` : 'Le chauffeur'} est parti avec ${num}.`,
+          v.eta ? `Arrivée estimée vers ${heure(v.eta)}${Number(v.arretsAvant) > 0 ? `, après ${v.arretsAvant} autre${Number(v.arretsAvant) > 1 ? 's' : ''} arrêt${Number(v.arretsAvant) > 1 ? 's' : ''}` : ''}.` : '',
+          'Suivez son trajet en direct et prévenez la personne sur place : le lien reste valable 48 heures, sans connexion.',
+        ].filter(Boolean),
+        action: v.suivi ? { label: 'Suivre le chauffeur', path: `#/suivi/${v.suivi}` } : { label: 'Suivre la commande', path: order },
+      };
+    }
     case 'LIVRAISON_EFFECTUEE':
       return {
         subject: `Livraison effectuée : ${v.numero ?? ''}`.trim(),
@@ -169,10 +191,76 @@ function spec(modele: string, v: Vars): Spec | null {
   }
 }
 
-/** Rend un modèle ; `null` si le modèle n'a pas de version e-mail. */
-export function renderEmail(modele: string, vars: Vars, ctx: TemplateContext): RenderedEmail | null {
-  const s = spec(modele, vars);
+/** Texte personnalisé par l'exploitant (Back-Office) : sujet, paragraphes séparés par une ligne vide, libellé du bouton. */
+export interface EmailOverride {
+  sujet: string;
+  corps: string;
+  bouton: string | null;
+}
+
+/**
+ * Modèles modifiables, avec des variables d'exemple pour l'aperçu. Les valeurs booléennes choisissent la variante
+ * du texte d'origine proposée comme point de départ.
+ */
+export const EDITABLE: { modele: string; libelle: string; exemple: Vars }[] = [
+  { modele: 'INVITATION', libelle: 'Invitation d’un utilisateur', exemple: { invitePar: 'Sophie Durand', entreprise: 'Promotion Horizon SAS', expireLe: '2026-12-01', jeton: 'exemple' } },
+  { modele: 'COMMANDE_SOUMISE', libelle: 'Commande reçue', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple' } },
+  { modele: 'VALIDATION_REQUISE', libelle: 'Commande à valider', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple' } },
+  { modele: 'VALIDATION_ACCORDEE', libelle: 'Commande validée en interne', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple' } },
+  { modele: 'VALIDATION_REFUSEE', libelle: 'Commande refusée en interne', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', motif: 'Budget du trimestre atteint' } },
+  { modele: 'CRENEAU_CONFIRME', libelle: 'Créneau confirmé', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', date: '2026-11-26' } },
+  { modele: 'CRENEAU_CONTRE_PROPOSE', libelle: 'Créneau contre-proposé', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', date: '2026-11-27' } },
+  { modele: 'CHAUFFEUR_EN_ROUTE', libelle: 'Chauffeur en route (lien de suivi)', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', chauffeur: 'Karim', eta: '2026-11-26T13:20:00Z', arretsAvant: 1, suivi: 'exemple', type: 'LIVRAISON' } },
+  { modele: 'LIVRAISON_EFFECTUEE', libelle: 'Livraison effectuée', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple' } },
+  { modele: 'ARTICLES_MIS_EN_STOCK', libelle: 'Biens mis en stock', exemple: { numero: 'CMD-2026-000043', nbArticles: 12 } },
+  { modele: 'FACTURE_EMISE', libelle: 'Facture émise', exemple: { numero: 'FA-2026-000120', totalTtcCents: 48600, echeance: '2026-12-31' } },
+  { modele: 'PAIEMENT_ECHOUE', libelle: 'Paiement refusé', exemple: { numero: 'FA-2026-000120', totalTtcCents: 48600, raison: 'Provision insuffisante' } },
+  { modele: 'PAIEMENT_RECU', libelle: 'Paiement reçu', exemple: { numero: 'FA-2026-000120', montantCents: 48600 } },
+  { modele: 'RELANCE_IMPAYE', libelle: 'Relance d’impayé', exemple: { numero: 'FA-2026-000120', echeance: '2026-10-31', joursRetard: 15, resteCents: 48600, niveau: 2 } },
+  { modele: 'EXPORT_PRET', libelle: 'Inventaire illustré prêt', exemple: { nbArticles: 230 } },
+  { modele: 'LITIGE_RECU', libelle: 'Signalement reçu', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', litige: 'LIT-2026-000003' } },
+  { modele: 'LITIGE_TRAITE', libelle: 'Réponse à un signalement', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', litige: 'LIT-2026-000003', statut: 'RESOLU', reponse: 'Le plateau sera remplacé.' } },
+  { modele: 'PHOTO_PRETE', libelle: 'Photo ou constat prêt', exemple: { libelle: 'Bureau d’accueil 1', articleId: 'exemple', demande: 'PHOTO' } },
+];
+
+/** Repères utilisables dans un modèle : les variables de l'exemple. */
+export function placeholders(modele: string): string[] {
+  const e = EDITABLE.find((x) => x.modele === modele);
+  return e ? Object.entries(e.exemple).filter(([k, v]) => typeof v !== 'boolean' && !['commandeId', 'articleId', 'jeton', 'suivi', 'type', 'statut', 'demande'].includes(k)).map(([k]) => k) : [];
+}
+
+/** Texte d'origine d'un modèle, variables en {{repère}} : point de départ de l'édition. */
+export function defaultTemplate(modele: string): EmailOverride | null {
+  const e = EDITABLE.find((x) => x.modele === modele);
+  if (!e) return null;
+  const marks = Object.fromEntries(Object.entries(e.exemple).map(([k, v]) => [k, placeholders(modele).includes(k) ? `{{${k}}}` : v]));
+  const s = spec(modele, marks);
   if (!s) return null;
+  return { sujet: s.subject, corps: s.lines.join('\n\n'), bouton: s.action?.label ?? null };
+}
+
+function fill(text: string, vars: Vars): string {
+  return text.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_m, k: string) => {
+    const v = vars[k];
+    if (v === undefined || v === null) return '';
+    if (/Cents$/.test(k)) return euros(v);
+    if (k === 'eta') return heure(v);
+    if (['date', 'echeance', 'expireLe'].includes(k)) return dateFr(v);
+    return String(v);
+  });
+}
+
+/** Rend un modèle ; `null` si le modèle n'a pas de version e-mail. */
+export function renderEmail(modele: string, vars: Vars, ctx: TemplateContext, override?: EmailOverride | null): RenderedEmail | null {
+  const base = spec(modele, vars);
+  if (!base) return null;
+  const s: Spec = override
+    ? {
+        subject: fill(override.sujet, vars).trim() || base.subject,
+        lines: fill(override.corps, vars).split(/\n\s*\n/).map((l) => l.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean),
+        action: base.action && { ...base.action, label: override.bouton?.trim() || base.action.label },
+      }
+    : base;
   const hello = ctx.destinataire ? `Bonjour ${ctx.destinataire},` : 'Bonjour,';
   const url = s.action ? `${ctx.publicUrl}/${s.action.path}` : null;
   const text = [hello, '', ...s.lines, ...(url ? ['', `${s.action!.label} : ${url}`] : []), '', '— JAMYSTOCK', 'Stockage tracé, objet par objet.'].join('\n');

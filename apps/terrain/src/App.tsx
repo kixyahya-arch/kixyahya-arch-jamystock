@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getSession, onSessionChange, type Session } from './lib/api';
 import { onRejected, startAutoSync } from './lib/outbox';
+import { resumeTracking } from './lib/tracking';
 import type { Reception } from './lib/data';
 import { Login } from './screens/Login';
 import { Home } from './screens/Home';
@@ -26,6 +27,10 @@ export function App() {
 
   useEffect(() => onSessionChange(setSession), []);
   useEffect(() => (session ? startAutoSync() : undefined), [session]);
+  // un trajet commencé avant un rechargement continue d'envoyer sa position
+  useEffect(() => {
+    if (session) resumeTracking();
+  }, [session]);
   // Une action refusée par le serveur doit se voir tout de suite, quel que soit l'écran (§7.5).
   useEffect(
     () =>

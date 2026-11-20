@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { ORDER_STATUSES, ORDER_TYPES } from '@jamystock/domain';
+import { GeocoderService } from '../flux/geocoder.service.js';
 import { OrdersService } from './orders.service.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
 import type { AuthUser } from '../auth/auth.service.js';
@@ -52,7 +53,10 @@ const CollectionBody = z.object({
 
 @Controller()
 export class OrdersController {
-  constructor(@Inject(OrdersService) private readonly orders: OrdersService) {}
+  constructor(
+    @Inject(OrdersService) private readonly orders: OrdersService,
+    @Inject(GeocoderService) private readonly geocoder: GeocoderService,
+  ) {}
 
   @Get('cart')
   @RequirePermission('order.create')
@@ -89,14 +93,17 @@ export class OrdersController {
   @Post('orders/:id/submit')
   @HttpCode(200)
   @RequirePermission('order.create')
-  submit(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
-    return this.orders.submit(user, uuid.parse(id), SubmitBody.parse(body));
+  async submit(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const b = SubmitBody.parse(body);
+    // SUI-02 : coordonnées de l'adresse pour l'heure d'arrivée estimée (au mieux, sans bloquer la commande)
+    return this.orders.submit(user, uuid.parse(id), { ...b, adresse: await this.geocoder.complete(b.adresse) });
   }
 
   @Post('collections')
   @RequirePermission('collection.request')
-  collection(@CurrentUser() user: AuthUser, @Body() body: unknown) {
-    return this.orders.requestCollection(user, CollectionBody.parse(body));
+  async collection(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const b = CollectionBody.parse(body);
+    return this.orders.requestCollection(user, { ...b, adresse: await this.geocoder.complete(b.adresse) });
   }
 
   @Post('orders/:id/approve')

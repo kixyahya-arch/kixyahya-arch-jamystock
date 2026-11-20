@@ -56,7 +56,7 @@ export async function seedDemoOrders(url: string, now = new Date()): Promise<num
       if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
       return d.toISOString().slice(0, 10);
     };
-    const boulogne = { libelle: '12 rue des Tilleuls, 92100 Boulogne-Billancourt', codePostal: '92100', ville: 'Boulogne-Billancourt' };
+    const boulogne = { libelle: '12 rue des Tilleuls, 92100 Boulogne-Billancourt', codePostal: '92100', ville: 'Boulogne-Billancourt', lat: 48.8396, lng: 2.2399 };
     const contact = { nom: 'Paul Leroy', telephone: '06 12 34 56 78' };
     const deliver = async (user: AuthUser, ids: string[], projetId: string | undefined, input: Parameters<OrdersService['submit']>[2]) => {
       if (!ids.length) return null;
@@ -84,7 +84,7 @@ export async function seedDemoOrders(url: string, now = new Date()): Promise<num
     if (
       await deliver(dsg, ctx.bureaux, ctx.jardins, {
         type: 'LIVRAISON',
-        adresse: { libelle: '4 allée des Jardins, 94300 Vincennes', codePostal: '94300', ville: 'Vincennes' },
+        adresse: { libelle: '4 allée des Jardins, 94300 Vincennes', codePostal: '94300', ville: 'Vincennes', lat: 48.8471, lng: 2.4386 },
         contactSite: { nom: 'Sophie Arnaud', telephone: '06 98 76 54 32' },
         dateSouhaitee: plus(5),
         creneau: '13:00-17:00',
@@ -97,7 +97,7 @@ export async function seedDemoOrders(url: string, now = new Date()): Promise<num
     await orders.requestCollection(
       batir,
       {
-        adresse: { libelle: '27 quai de la Loire, 75019 Paris', codePostal: '75019', ville: 'Paris' },
+        adresse: { libelle: '27 quai de la Loire, 75019 Paris', codePostal: '75019', ville: 'Paris', lat: 48.8875, lng: 2.3732 },
         contactSite: { nom: 'Karim Benali', telephone: '07 11 22 33 44' },
         dateSouhaitee: plus(2),
         creneau: '08:00-12:00',

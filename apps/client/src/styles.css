@@ -1685,3 +1685,118 @@ label.inline {
 .dispute-form select {
   width: 100%;
 }
+
+/* Lot 5 · suivi du chauffeur (page publique) */
+.tracking {
+  min-height: 100vh;
+  background: var(--bg);
+}
+.tracking-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.tracking-head span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.tracking-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  display: grid;
+  gap: 16px;
+}
+.tracking-hero h1 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(32px, 8vw, 44px);
+  line-height: 1.05;
+  margin: 6px 0 8px;
+}
+.tracking-hero p {
+  margin: 0 0 4px;
+}
+.tracking-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  counter-reset: step;
+}
+.tracking-steps li {
+  counter-increment: step;
+  padding-top: 10px;
+  border-top: 4px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+.tracking-steps li.done {
+  border-top-color: var(--ink);
+  color: var(--ink);
+}
+.tracking-steps li.current {
+  border-top-color: var(--lime);
+  color: var(--ink);
+  font-weight: 700;
+}
+.tracking-map {
+  height: 320px;
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--muted-bg);
+  z-index: 0;
+}
+.tracking-map .leaflet-tile-pane {
+  filter: grayscale(0.6);
+}
+.tracking-foot {
+  margin: 0;
+}
+.map-pin {
+  background: none;
+  border: none;
+}
+.map-pin span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  font: 700 12px/1 var(--font-sans);
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 35%);
+  border: 2px solid #fff;
+}
+.pin-home span {
+  background: #000;
+  color: #fff;
+}
+.pin-truck span {
+  background: #e5ff31;
+  color: #000;
+  border-color: #000;
+}
+.pin-truck.stale span {
+  background: #fff;
+  color: #555;
+  border: 2px dashed #555;
+}
+.track-callout .btn.primary {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+@media (max-width: 340px) {
+  .tracking-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

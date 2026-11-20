@@ -90,7 +90,16 @@ export class OrdersService {
   async get(user: AuthUser, id: string) {
     return this.db.tx(ctxOf(user), async (tx) => {
       const order = await this.load(tx, id);
-      return this.present(tx, order);
+      // SUI-02 : lien de suivi du chauffeur, tant qu'il est valable (48 h après le départ)
+      const suivi = (
+        await tx.query<{ jeton: string; expireLe: string }>(
+          `SELECT m.donnees->'suivi'->>'jeton' AS jeton, m.donnees->'suivi'->>'expireLe' AS "expireLe" FROM mission m
+            WHERE m.commande_id = $1 AND m.type IN ('LIVRAISON', 'COLLECTE') AND m.donnees ? 'suivi' AND (m.donnees->'suivi'->>'expireLe')::timestamptz > now()
+            ORDER BY m.debut_reel DESC NULLS LAST LIMIT 1`,
+          [order.id],
+        )
+      ).rows[0];
+      return { ...(await this.present(tx, order)), suivi: suivi ?? null };
     });
   }
 

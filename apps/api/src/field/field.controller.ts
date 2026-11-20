@@ -100,6 +100,22 @@ export class FieldController {
     return this.field.expectedReceptions(user);
   }
 
+  /** FLX-05 : positions envoyées par le terminal pendant une livraison ou une collecte en cours. */
+  @Post('positions')
+  @HttpCode(200)
+  @RequirePermission('delivery.execute')
+  positions(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const b = z
+      .object({
+        positions: z
+          .array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), precision: z.number().min(0).max(100000).optional(), vitesseKmh: z.number().min(0).max(300).optional(), at: z.string().datetime() }))
+          .min(1)
+          .max(120),
+      })
+      .parse(body);
+    return this.field.recordPositions(user, b.positions);
+  }
+
   /** REC-06 : emplacements suggérés pour ranger un article (en ligne ; hors réseau, l'opérateur choisit seul). */
   @Get('locations/suggest')
   @RequirePermission('stock.move')

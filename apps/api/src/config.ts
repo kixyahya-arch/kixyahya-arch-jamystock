@@ -18,6 +18,10 @@ export interface AppConfig {
   mail: { brevoApiKey?: string; fromEmail: string; fromName: string; worker: boolean };
   /** ADM-04 : paiement par Stripe (carte, prélèvement SEPA). Sans clé, seul le virement est proposé. */
   stripe: { secretKey?: string; webhookSecret?: string; apiBase: string };
+  /** SUI-02 : géocodage des adresses (Base Adresse Nationale) pour l'heure d'arrivée estimée ; actif en production. */
+  geocoder: { mode: 'ban' | 'off'; baseUrl: string };
+  /** FLX-05 : fond de carte du Back-Office et de la page de suivi (tuiles XYZ). */
+  mapTilesUrl: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -43,5 +47,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       worker: env.MAIL_WORKER ? env.MAIL_WORKER === 'on' : env.NODE_ENV === 'production' || env.RENDER === 'true',
     },
     stripe: { secretKey: env.STRIPE_SECRET_KEY || undefined, webhookSecret: env.STRIPE_WEBHOOK_SECRET || undefined, apiBase: env.STRIPE_API_BASE || 'https://api.stripe.com' },
+    geocoder: {
+      mode: (env.GEOCODER ? env.GEOCODER : env.NODE_ENV === 'production' || env.RENDER === 'true' ? 'ban' : 'off') === 'ban' ? 'ban' : 'off',
+      baseUrl: (env.GEOCODER_URL || 'https://api-adresse.data.gouv.fr').replace(/\/+$/, ''),
+    },
+    mapTilesUrl: env.MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   };
 }

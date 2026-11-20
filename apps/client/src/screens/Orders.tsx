@@ -110,6 +110,23 @@ export function OrderView({ id, role }: { id: string; role: string }) {
         <h1>{ORDER_STATUS[o.statut] ?? o.statut}</h1>
       </section>
 
+      {o.suivi && !['LIVREE', 'LIVREE_AVEC_RESERVES', 'STOCKEE', 'ANNULEE'].includes(o.statut) && (
+        <div className="callout track-callout">
+          <p>
+            <strong>{o.type === 'COLLECTE' ? 'Le chauffeur est en route pour la collecte.' : 'Le chauffeur est en route.'}</strong> Suivez sa position et l’heure d’arrivée estimée ; vous pouvez
+            transmettre ce lien à la personne sur place, il fonctionne sans compte.
+          </p>
+          <div className="row-actions">
+            <a className="btn primary" href={href({ name: 'suivi', token: o.suivi.jeton })} target="_blank" rel="noreferrer">
+              Suivre le chauffeur
+            </a>
+            <button type="button" className="btn secondary" onClick={() => void navigator.clipboard?.writeText(`${location.origin}${location.pathname}${href({ name: 'suivi', token: o.suivi!.jeton })}`)}>
+              Copier le lien
+            </button>
+          </div>
+        </div>
+      )}
+
       {o.statut === 'EN_ATTENTE_VALIDATION' && role !== 'B2B_ADMIN' && (
         <Banner kind="info">Votre administrateur doit valider cette demande avant qu’elle soit transmise à JAMYSTOCK.</Banner>
       )}
