@@ -38,6 +38,7 @@ interface ArticlesResult {
   ignorees: string[];
   nouveauxClients: string[];
   articlesACreer: number;
+  chezLeClient: number;
   dejaRepris: number;
   photos: number;
   cree: number;
@@ -50,6 +51,7 @@ interface ArticlesResult {
     quantite: number;
     aCreer: number;
     emplacement: string | null;
+    situation: 'EN_STOCK' | 'RESTITUE';
     photos: number;
   }[];
 }
@@ -354,8 +356,9 @@ function ArticlesImport({ onDone, onError }: { onDone: (m: string) => void; onEr
   return (
     <>
       <p className="hint">
-        Export des produits / du stock : une ligne par produit. Une quantité de 3 donne 3 objets distincts, chacun avec son QR. Les emplacements reconnus sont
-        repris ; les autres objets sont rangés à l’emplacement par défaut, à reclasser ensuite depuis l’app terrain.
+        Export des produits / du stock : une ligne par produit. Une quantité de 3 donne 3 objets distincts, chacun avec son QR. La colonne « Situation » (en
+        stock, chez le client, sorti) indique où se trouve chaque objet. Les emplacements reconnus sont repris ; les autres objets sont rangés à l’emplacement
+        par défaut, à reclasser ensuite depuis l’app terrain.
       </p>
       <div className="form-grid">
         <label>
@@ -396,7 +399,8 @@ function ArticlesImport({ onDone, onError }: { onDone: (m: string) => void; onEr
           <Columns colonnes={res.colonnes} ignorees={res.ignorees} />
           <p>
             <strong>{plural(res.articlesACreer, 'objet à créer', 'objets à créer')}</strong> ({plural(res.valides, 'ligne valide', 'lignes valides')} sur{' '}
-            {res.lignes}){res.dejaRepris > 0 && <> · {plural(res.dejaRepris, 'déjà repris')}</>}
+            {res.lignes}){res.chezLeClient > 0 && <> · dont {plural(res.chezLeClient, 'installé chez le client', 'installés chez le client')}</>}
+            {res.dejaRepris > 0 && <> · {plural(res.dejaRepris, 'déjà repris')}</>}
             {res.photos > 0 && <> · {plural(res.photos, 'photo')} à rapatrier</>}
           </p>
           {res.nouveauxClients.length > 0 && (
@@ -432,7 +436,7 @@ function ArticlesImport({ onDone, onError }: { onDone: (m: string) => void; onEr
                       {a.categorie && <span className="hint"> · {a.categorie}</span>}
                     </td>
                     <td>{a.aCreer === a.quantite ? a.quantite : `${a.aCreer}/${a.quantite}`}</td>
-                    <td className="mono">{a.emplacement ?? '—'}</td>
+                    <td className="mono">{a.situation === 'RESTITUE' ? 'chez le client' : (a.emplacement ?? '—')}</td>
                     <td>{a.photos || '—'}</td>
                   </tr>
                 ))}

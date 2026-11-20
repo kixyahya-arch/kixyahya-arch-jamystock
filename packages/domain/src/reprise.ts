@@ -29,6 +29,8 @@ export interface RepriseArticleRow {
   hauteurM: number | null;
   poidsKg: number | null;
   etat: 'NEUF' | 'BON' | 'USE' | 'ENDOMMAGE';
+  /** EN_STOCK : à l'entrepôt ; RESTITUE : installé chez le client (bureau de vente, appartement témoin…). */
+  situation: 'EN_STOCK' | 'RESTITUE';
   dateEntree: string | null;
   photos: string[];
 }
@@ -162,6 +164,22 @@ function date(s: string): string | null | 'invalide' {
   return Number.isNaN(d.getTime()) ? 'invalide' : d.toISOString();
 }
 
+const SITUATIONS: Record<string, RepriseArticleRow['situation'] | 'SORTI'> = {
+  en_stock: 'EN_STOCK',
+  stock: 'EN_STOCK',
+  entrepot: 'EN_STOCK',
+  au_depot: 'EN_STOCK',
+  chez_le_client: 'RESTITUE',
+  client: 'RESTITUE',
+  livre: 'RESTITUE',
+  sur_site: 'RESTITUE',
+  installe: 'RESTITUE',
+  sorti: 'SORTI',
+  detruit: 'SORTI',
+  dechetterie: 'SORTI',
+  donne: 'SORTI',
+};
+
 const ETATS: Record<string, RepriseArticleRow['etat']> = {
   neuf: 'NEUF',
   new: 'NEUF',
@@ -213,6 +231,7 @@ export const ARTICLE_ALIASES: Record<string, string[]> = {
   poidsKg: ['poids', 'poids kg', 'poids_kg', 'weight', 'masse'],
   etat: ['etat', 'condition', 'state'],
   dateEntree: ['date entree', 'date d entree', 'date de reception', 'entree le', 'date de creation', 'cree le', 'created at', 'date'],
+  situation: ['situation', 'statut', 'statut stock', 'etat du stock', 'ou est l objet'],
   photos: ['photo', 'photos', 'image', 'images', 'url photo', 'url image', 'picture', 'visuel'],
 };
 
@@ -265,11 +284,14 @@ export function parseRepriseArticles(text: string, opts: RepriseArticleOptions =
     const etatRaw = normalizeHeader(get('etat'));
     const etat = etatRaw ? ETATS[etatRaw] : 'BON';
     if (!etat) problems.push(`état « ${get('etat')} » inconnu (neuf, bon, usé ou endommagé)`);
+    const sitRaw = normalizeHeader(get('situation'));
+    const situation = sitRaw ? SITUATIONS[sitRaw] : 'EN_STOCK';
+    if (!situation) problems.push(`situation « ${get('situation')} » inconnue (en stock, chez le client ou sorti)`);
     const d = date(get('dateEntree'));
     if (d === 'invalide') problems.push(`date « ${get('dateEntree')} » illisible`);
     const reference = get('reference') || null;
     const codeBarres = get('codeBarres') || null;
-    const origine = codeBarres || reference ? `${clientKey(client)}|${codeBarres ?? reference}` : `${clientKey(client)}|${normalizeHeader(libelle)}|L${r.line}`;
+    const origine = codeBarres || reference ? `${clientKey(client)}|${reference ?? codeBarres}` : `${clientKey(client)}|${normalizeHeader(libelle)}|L${r.line}`;
     const dup = seen.get(origine);
     if (dup) problems.push(`même code que la ligne ${dup}`);
     if (problems.length) {
@@ -277,7 +299,7 @@ export function parseRepriseArticles(text: string, opts: RepriseArticleOptions =
       continue;
     }
     seen.set(origine, r.line);
-    if (q === 0) continue; // produit référencé mais plus en stock : rien à reprendre
+    if (q === 0 || situation === 'SORTI') continue; // plus en stock, ou sorti (déchetterie, don) : rien à reprendre
     rows.push({
       line: r.line,
       origine,
@@ -293,6 +315,7 @@ export function parseRepriseArticles(text: string, opts: RepriseArticleOptions =
       ...(dims as { longueurM: number | null; largeurM: number | null; hauteurM: number | null }),
       poidsKg: poids,
       etat: etat!,
+      situation: situation as RepriseArticleRow['situation'],
       dateEntree: d as string | null,
       photos: get('photos')
         .split(/[\s,;|]+/)

@@ -198,12 +198,50 @@ describe('reprise du stock', () => {
     expect(n.rows[0]!.n).toBe(5);
   });
 
+  it('objets installés chez le client : hors dépôt, rattachés au site ; objets sortis ignorés', async () => {
+    const csv2 = [
+      'Désignation;Référence;Client;Projet;Situation;Quantité',
+      'Canapé témoin;MS-1;Cabinet Martel;Appartement témoin Clamart;chez le client;2',
+      'Lampe jetée;MS-2;Cabinet Martel;;sorti;1',
+      'Bureau stock;MS-3;Cabinet Martel;;en stock;1',
+      'Chaise;MS-4;Cabinet Martel;;perdue;1',
+    ].join('\n');
+    const dry = await post(admin, '/bo/reprise/articles', { csv: csv2, depotId: t.data.depotId, emplacementParDefautId: quai });
+    expect(dry.body).toMatchObject({ articlesACreer: 3, chezLeClient: 2, nbErreurs: 1 });
+    expect(dry.body.erreurs[0].message).toMatch(/situation « perdue » inconnue/);
+    const ok = csv2.split('\n').slice(0, 4).join('\n');
+    const res = await post(admin, '/bo/reprise/articles', { csv: ok, depotId: t.data.depotId, emplacementParDefautId: quai, dryRun: false });
+    expect(res.body.cree).toBe(3);
+    const a = await sys<{ libelle: string; statut: string; emplacement_courant_id: string | null; projet: string | null; mouvements: string }>(
+      `SELECT a.libelle, a.statut, a.emplacement_courant_id, p.nom AS projet,
+              (SELECT string_agg(m.type::text, ',' ORDER BY m.horodatage_terminal) FROM mouvement m WHERE m.article_id = a.id) AS mouvements
+         FROM article a LEFT JOIN projet p ON p.id = a.projet_id WHERE a.reference_interne IN ('MS-1','MS-2','MS-3') ORDER BY a.libelle`,
+    );
+    expect(a.rows).toEqual([
+      { libelle: 'Bureau stock', statut: 'EN_STOCK', emplacement_courant_id: quai, projet: null, mouvements: 'RECEPTION' },
+      {
+        libelle: 'Canapé témoin (1/2)',
+        statut: 'RESTITUE',
+        emplacement_courant_id: null,
+        projet: 'Appartement témoin Clamart',
+        mouvements: 'RECEPTION,LIVRAISON',
+      },
+      {
+        libelle: 'Canapé témoin (2/2)',
+        statut: 'RESTITUE',
+        emplacement_courant_id: null,
+        projet: 'Appartement témoin Clamart',
+        mouvements: 'RECEPTION,LIVRAISON',
+      },
+    ]);
+  });
+
   it('photos : téléchargées par lots, échecs définitifs mis de côté', async () => {
     const r1 = await post(admin, '/bo/reprise/photos', { lot: 100 });
     expect(r1.status).toBe(200);
     expect(r1.body).toMatchObject({ telechargees: 4, echecs: 4, restant: 0 });
     const etat = await get(admin, '/bo/reprise');
-    expect(etat.body).toMatchObject({ articles: 6, photos: { TELECHARGEE: 4, ECHEC: 4, A_TELECHARGER: 0 } });
+    expect(etat.body).toMatchObject({ articles: 9, photos: { TELECHARGEE: 4, ECHEC: 4, A_TELECHARGER: 0 } });
     expect(etat.body.echecs.map((e: { erreur: string }) => e.erreur).sort()).toEqual(['HTTP 404', 'HTTP 404', 'HTTP 404', 'pas une image (text/html)']);
     const ph = await sys<{ n: number }>(
       `SELECT count(*)::int AS n FROM photo p JOIN article a ON a.id = p.article_id WHERE a.origine_import IS NOT NULL AND p.televersee`,

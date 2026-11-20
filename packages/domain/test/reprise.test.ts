@@ -63,6 +63,15 @@ describe('reprise des articles', () => {
     expect(r.rows[0]).toMatchObject({ client: 'Horizon', quantite: 2, origine: 'horizon|bureau|L2' });
   });
 
+  it('situation : en stock par défaut, chez le client, sorti ignoré', () => {
+    const r = parseRepriseArticles('Nom;Client;Situation\nA;H;\nB;H;Chez le client\nC;H;Sorti\nD;H;Livré');
+    expect(r.rows.map((x) => [x.libelle, x.situation])).toEqual([
+      ['A', 'EN_STOCK'],
+      ['B', 'RESTITUE'],
+      ['D', 'RESTITUE'],
+    ]);
+  });
+
   it('refuse une quantité aberrante', () => {
     const r = parseRepriseArticles('Nom;Client;Stock\nVis;Horizon;12000');
     expect(r.errors[0]!.message).toMatch(/supérieure à 500/);

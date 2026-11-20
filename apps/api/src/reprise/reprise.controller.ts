@@ -258,7 +258,7 @@ export class RepriseController {
           nouveauxClients.add(r.client);
         }
         let emplacementId = defaut.id;
-        if (r.emplacement) {
+        if (r.emplacement && r.situation === 'EN_STOCK') {
           const found = locations.get(normalizeCode(r.emplacement));
           if (found) emplacementId = found;
           else avertissements.push({ line: r.line, message: `emplacement « ${r.emplacement} » absent du dépôt : rangé à l’emplacement par défaut` });
@@ -280,6 +280,7 @@ export class RepriseController {
         nbAvertissements: avertissements.length,
         nouveauxClients: [...nouveauxClients],
         articlesACreer: total,
+        chezLeClient: plan.filter((r) => r.situation === 'RESTITUE').reduce((s, r) => s + r.aCreer, 0),
         dejaRepris: plan.reduce((s, r) => s + r.quantite - r.aCreer, 0),
         photos: plan.reduce((s, r) => s + (r.aCreer ? r.photos.length * r.aCreer : 0), 0),
         apercu: plan.slice(0, 200).map((r) => ({
@@ -291,6 +292,7 @@ export class RepriseController {
           quantite: r.quantite,
           aCreer: r.aCreer,
           emplacement: r.emplacement,
+          situation: r.situation,
           photos: r.photos.length,
         })),
       };
@@ -339,7 +341,7 @@ export class RepriseController {
             `INSERT INTO article (id, tenant_id, entreprise_id, projet_id, qr_code, libelle, reference_interne, categorie_id, description,
                                   longueur_m, largeur_m, hauteur_m, poids_kg, etat, statut, emplacement_courant_id, date_entree,
                                   dernier_mouvement_le, origine_import, ancien_code, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'EN_STOCK',$15,$16,now(),$17,$18,$19)`,
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$20,$15,$16,now(),$17,$18,$19)`,
             [
               id,
               user.tenantId,
@@ -355,11 +357,12 @@ export class RepriseController {
               r.hauteurM,
               r.poidsKg,
               r.etat,
-              r.emplacementId,
+              r.situation === 'EN_STOCK' ? r.emplacementId : null,
               entree,
               origine,
               r.codeBarres,
               user.id,
+              r.situation,
             ],
           );
           await tx.query(
@@ -367,6 +370,14 @@ export class RepriseController {
              VALUES ($1,$2,$3,'RECEPTION',$4,'ATTENDU','EN_STOCK',$5,'reprise',now(),$6)`,
             [uuidv7(), user.tenantId, id, r.emplacementId, user.id, MOTIF],
           );
+          if (r.situation === 'RESTITUE') {
+            // installé chez le client (bureau de vente, appartement témoin) : sorti du dépôt, collectable plus tard
+            await tx.query(
+              `INSERT INTO mouvement (id, tenant_id, article_id, type, de_emplacement_id, statut_avant, statut_apres, auteur_id, appareil_id, horodatage_terminal, motif)
+               VALUES ($1,$2,$3,'LIVRAISON',$4,'EN_STOCK','RESTITUE',$5,'reprise',now() + interval '1 second',$6)`,
+              [uuidv7(), user.tenantId, id, r.emplacementId, user.id, `${MOTIF} : installé chez le client${r.projet ? ` (${r.projet})` : ''}`],
+            );
+          }
           for (const url of r.photos) {
             await tx.query(`INSERT INTO reprise_photo (id, tenant_id, article_id, url) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`, [
               uuidv7(),
