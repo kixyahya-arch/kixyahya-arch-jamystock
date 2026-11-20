@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { href, type Route } from '../lib/router';
 import { useCarts } from '../lib/cart';
 import type { Session } from '../lib/api';
+import { BrandLogo } from './Brand';
 
 export function Shell({ session, route, onLogout, children }: { session: Session; route: Route; onLogout: () => void; children: ReactNode }) {
   const { count } = useCarts();
@@ -31,8 +32,8 @@ export function Shell({ session, route, onLogout, children }: { session: Session
           </div>
         )}
         <div className="wrap header-row">
-          <a className="wordmark" href={href({ name: 'inventaire' })}>
-            jamystock
+          <a className="wordmark" href={href({ name: 'inventaire' })} aria-label="JAMYSTOCK, mon stock">
+            <BrandLogo variant="blanc" size={36} tagline={false} />
           </a>
           <nav className="main-nav" aria-label="Navigation principale">
             {nav.map((n) => (
@@ -74,7 +75,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
             </div>
           </div>
           <div className="giant" aria-hidden="true">
-            jamystock
+            JAMYSTOCK
           </div>
         </div>
       </footer>
@@ -102,7 +103,11 @@ export function Pills<T extends string>({ value, options, onChange, label }: { v
   );
 }
 
-export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'lime' | 'dark' | 'alert' }) {
+/** Couleurs fonctionnelles de la charte : accent = en préparation / à traiter, route = en cours de livraison,
+ * ok = livré, dark = stocké, alert = anomalie (rouge, jamais décoratif), neutral = annulé / archivé. */
+export type Tone = 'neutral' | 'accent' | 'route' | 'ok' | 'dark' | 'alert';
+
+export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
   return <span className={`status ${tone}`}>{label}</span>;
 }
 

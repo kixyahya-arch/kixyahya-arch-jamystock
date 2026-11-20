@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ApiError, publicGet } from '../lib/api';
 import { Banner } from '../components/ui';
+import { BrandLogo } from '../components/Brand';
 
 interface Suivi {
   numero: string | null;
@@ -71,7 +72,7 @@ export function Tracking({ token }: { token: string }) {
   return (
     <div className="tracking">
       <header className="tracking-head">
-        <strong className="wordmark">jamystock</strong>
+        <BrandLogo size={40} tagline={false} />
         <span>Suivi {s?.type === 'COLLECTE' ? 'de collecte' : 'de livraison'}</span>
       </header>
       {error && !s ? (

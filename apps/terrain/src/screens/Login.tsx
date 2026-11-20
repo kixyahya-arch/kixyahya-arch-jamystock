@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ApiError, login, NetworkError, type Session } from '../lib/api';
 import { Banner } from '../components/ui';
+import { BrandLogo } from '../components/Brand';
 
 export function Login({ onLogged }: { onLogged: (s: Session) => void }) {
   const [email, setEmail] = useState('');
@@ -13,7 +14,8 @@ export function Login({ onLogged }: { onLogged: (s: Session) => void }) {
   return (
     <div className="login">
       <div className="login-brand">
-        <strong>JAMYSTOCK</strong>
+        <h1 className="sr-only">JAMYSTOCK Terrain</h1>
+        <BrandLogo variant="blanc" size={64} />
         <span>Terrain</span>
       </div>
       <form

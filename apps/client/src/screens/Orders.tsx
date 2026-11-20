@@ -2,10 +2,22 @@ import { useEffect, useState } from 'react';
 import { api, get, getSession, post } from '../lib/api';
 import { href } from '../lib/router';
 import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
-import { Banner, Pills, StatusPill } from '../components/ui';
+import { Banner, Pills, StatusPill, type Tone } from '../components/ui';
 
 const DONE = ['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE', 'STOCKEE', 'CLOTUREE', 'ANNULEE', 'REFUSEE'];
-const tone = (s: string) => (s === 'EN_ATTENTE_VALIDATION' || s === 'EN_LIVRAISON' ? 'lime' : ['ANNULEE', 'REFUSEE', 'ECHEC_LIVRAISON'].includes(s) ? 'alert' : DONE.includes(s) ? 'neutral' : 'dark');
+/** Couleurs fonctionnelles de la charte : en préparation (azur éclairci), en livraison (azur plein), livré (vert), stocké (encre). */
+const tone = (s: string): Tone =>
+  s === 'EN_LIVRAISON'
+    ? 'route'
+    : ['REFUSEE', 'ECHEC_LIVRAISON'].includes(s)
+      ? 'alert'
+      : s === 'STOCKEE'
+        ? 'dark'
+        : s === 'ANNULEE' || s === 'BROUILLON'
+          ? 'neutral'
+          : DONE.includes(s)
+            ? 'ok'
+            : 'accent';
 
 /** SUI-01 : suivi des commandes. */
 export function Orders({ ctx }: { ctx: Ctx }) {
@@ -286,7 +298,7 @@ function AfterDelivery({ orderId }: { orderId: string }) {
             <strong>
               {MOTIF[x.motif]} · <span className="mono">{x.numero}</span>
             </strong>
-            <StatusPill label={DISPUTE_STATUS[x.statut]} tone={x.statut === 'RESOLU' ? 'lime' : x.statut === 'REJETE' ? 'alert' : 'neutral'} />
+            <StatusPill label={DISPUTE_STATUS[x.statut]} tone={x.statut === 'RESOLU' ? 'ok' : x.statut === 'REJETE' ? 'alert' : 'accent'} />
           </div>
           <p>{x.description}</p>
           {x.articles.length > 0 && <small className="hint">Biens concernés : {x.articles.map((a) => a.libelle).join(', ')}</small>}

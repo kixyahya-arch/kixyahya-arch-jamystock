@@ -58,7 +58,7 @@ export function ArticleView({ id, canOrder }: { id: string; canOrder: boolean })
           {a.nom_client && <p className="hint">Désignation au dépôt : {a.libelle}</p>}
           {a.reference_interne && <p className="ref-line">Réf. interne <span className="mono">{a.reference_interne}</span></p>}
           <div className="status-row">
-            <StatusPill label={ARTICLE_STATUS[a.statut] ?? a.statut} tone={engaged ? 'dark' : 'lime'} />
+            <StatusPill label={ARTICLE_STATUS[a.statut] ?? a.statut} tone={engaged ? 'dark' : 'accent'} />
             <StatusPill label={CONDITION[a.etat] ?? a.etat} />
           </div>
           {a.description && <p>{a.description}</p>}
@@ -306,7 +306,7 @@ function Requests({ article }: { article: ArticleDetail }) {
               <span>
                 <strong>{r.demande === 'CONSTAT' ? 'Constat d’état' : 'Photo supplémentaire'}</strong> · demandée le {dateFr(r.demandeeLe)}
               </span>
-              <StatusPill label={REQ_STATUS[r.statut] ?? r.statut} tone={r.statut === 'TERMINEE' ? 'lime' : 'neutral'} />
+              <StatusPill label={REQ_STATUS[r.statut] ?? r.statut} tone={r.statut === 'TERMINEE' ? 'accent' : 'neutral'} />
               <small>« {r.message} »</small>
               {r.commentaire && <small>Réponse du dépôt : {r.commentaire}</small>}
             </li>

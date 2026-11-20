@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { formatEuros } from '@jamystock/domain';
+import { BRAND, drawBrandRule, drawBrandSymbol } from '../common/brand-pdf.js';
 
 /**
  * PDF des factures, avoirs et BL (§7.6, SUI-03) en pur JavaScript (pdf-lib) : aucun navigateur ni service
@@ -7,10 +8,11 @@ import { formatEuros } from '@jamystock/domain';
  * sont remplacés plutôt que de faire échouer la génération.
  */
 
-const INK = rgb(0.07, 0.09, 0.11);
-const MUTED = rgb(0.42, 0.45, 0.5);
-const LINE = rgb(0.85, 0.86, 0.88);
-const ACCENT = rgb(0.78, 0.93, 0.29); // vert-citron de l'identité JAMYSTOCK
+// charte JAMYSTOCK (docs/charte-graphique.md) : encre pour le texte, clair pour le total, filet dégradé en haut de page
+const INK = BRAND.encre;
+const MUTED = BRAND.muted;
+const LINE = BRAND.line;
+const ACCENT = BRAND.clair;
 const A4: [number, number] = [595.28, 841.89];
 const M = 48; // marge
 
@@ -34,6 +36,7 @@ class Writer {
   newPage() {
     this.page = this.doc.addPage(A4);
     this.pages.push(this.page);
+    drawBrandRule(this.page, 0, A4[1] - 6, A4[0], 6);
     this.y = A4[1] - M;
   }
 
@@ -174,7 +177,7 @@ export async function invoicePdf(d: InvoicePdfData): Promise<Buffer> {
   const right = A4[0] - M;
 
   // en-tête
-  w.page.drawRectangle({ x: M, y: w.y - 4, width: 18, height: 18, color: ACCENT });
+  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
   w.text(d.issuer.raisonSociale, M + 26, w.y, { size: 15, font: w.bold });
   w.text(label.toUpperCase(), right, w.y, { size: 15, font: w.bold, align: 'right' });
   w.y -= 22;
@@ -195,7 +198,7 @@ export async function invoicePdf(d: InvoicePdfData): Promise<Buffer> {
   w.y = top - Math.max(issuerLines.length, meta.length) * 12.5 - 14;
 
   // client
-  w.page.drawRectangle({ x: 300, y: w.y - 66, width: right - 300, height: 78, color: rgb(0.965, 0.968, 0.972) });
+  w.page.drawRectangle({ x: 300, y: w.y - 66, width: right - 300, height: 78, color: rgb(0.933, 0.949, 0.965) });
   let cy = w.y;
   w.text(d.client.type === 'B2B' ? 'Facturé à' : 'Client', 312, cy, { size: 8, color: MUTED });
   cy -= 14;
@@ -266,7 +269,7 @@ export async function invoicePdf(d: InvoicePdfData): Promise<Buffer> {
   if (rates.length === 1) tot(`TVA ${qty(rates[0]![0])} %`, formatEuros(d.tvaCents));
   else for (const [rate, base] of rates) tot(`TVA ${qty(rate)} % sur ${formatEuros(base)}`, formatEuros(Math.round((base * rate) / 100)));
   w.y -= 8;
-  w.page.drawRectangle({ x: 300, y: w.y - 7, width: right - 300, height: 21, color: ACCENT });
+  w.page.drawRectangle({ x: 300, y: w.y - 7, width: right - 300, height: 21, color: ACCENT, borderColor: BRAND.vert, borderWidth: 0.8 });
   tot(d.type === 'AVOIR' ? 'Total TTC crédité' : 'Total TTC', formatEuros(d.totalTtcCents), true);
   w.y -= 14;
 
@@ -320,7 +323,7 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
   const title = BL_TITLE[d.type];
   const w = await open(`${title} ${d.numero}`, `${d.issuer.raisonSociale} · ${title} ${d.numero} · ${d.depot ? 'déposé sans signature' : 'signé'} le ${dateFr(d.signeLe)}`);
   const right = A4[0] - M;
-  w.page.drawRectangle({ x: M, y: w.y - 4, width: 18, height: 18, color: ACCENT });
+  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
   w.text(d.issuer.raisonSociale, M + 26, w.y, { size: 15, font: w.bold });
   w.text(title.toUpperCase(), right, w.y, { size: 13, font: w.bold, align: 'right' });
   w.y -= 20;
@@ -438,7 +441,7 @@ export interface InventoryPdfData {
 export async function inventoryPdf(d: InventoryPdfData): Promise<Buffer> {
   const w = await open(`Inventaire ${d.client}`, `${d.emetteur} · inventaire ${d.client} · ${dateFr(d.genereLe)}`);
   const right = A4[0] - M;
-  w.page.drawRectangle({ x: M, y: w.y - 4, width: 18, height: 18, color: ACCENT });
+  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
   w.text(d.emetteur, M + 26, w.y, { size: 15, font: w.bold });
   w.text('INVENTAIRE', right, w.y, { size: 13, font: w.bold, align: 'right' });
   w.y -= 26;

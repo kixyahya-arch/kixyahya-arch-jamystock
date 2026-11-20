@@ -172,7 +172,7 @@ export function Users() {
                 <span className="muted">{u.email}</span>
               </span>
               <span className="user-role">{ROLE[u.role]}</span>
-              <StatusPill label={u.statut === 'INVITE' && u.invitation?.expiree ? 'Invitation expirée' : STATUT[u.statut]} tone={u.statut === 'ACTIF' ? 'neutral' : u.statut === 'INVITE' ? 'lime' : 'dark'} />
+              <StatusPill label={u.statut === 'INVITE' && u.invitation?.expiree ? 'Invitation expirée' : STATUT[u.statut]} tone={u.statut === 'ACTIF' ? 'neutral' : u.statut === 'INVITE' ? 'accent' : 'dark'} />
             </div>
             <div className="user-meta">
               <span>{u.role === 'B2B_ADMIN' ? 'Tous les projets' : u.projets.length ? u.projets.map(projName).join(' · ') : 'Aucun projet'}</span>

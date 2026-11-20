@@ -227,7 +227,7 @@ export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
                 <span className="doc-amount">
                   {d.totalTtcCents != null && <strong>{euros(d.totalTtcCents)}</strong>}
                   {d.type === 'FACTURE' && d.statut && (
-                    <StatusPill label={INVOICE_STATUS[d.statut] ?? d.statut} tone={d.statut === 'EMISE' ? 'lime' : d.statut === 'EN_RETARD' ? 'alert' : 'neutral'} />
+                    <StatusPill label={INVOICE_STATUS[d.statut] ?? d.statut} tone={d.statut === 'EMISE' ? 'accent' : d.statut === 'EN_RETARD' ? 'alert' : d.statut === 'PAYEE' ? 'ok' : 'neutral'} />
                   )}
                   {d.type === 'FACTURE' && d.statut === 'EMISE' && d.echeance && <span className="doc-date">avant le {dateFr(d.echeance)}</span>}
                   {canPay && d.type === 'FACTURE' && (d.statut === 'EMISE' || d.statut === 'EN_RETARD') && (

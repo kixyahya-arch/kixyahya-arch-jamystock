@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { href, type Route } from '../lib/router';
 import type { Session } from '../lib/api';
 import { ROLE } from '../lib/labels';
+import { BrandLogo } from './Brand';
 
 export function Shell({ session, route, onLogout, children }: { session: Session; route: Route; onLogout: () => void; children: ReactNode }) {
   const nav: { r: Route; label: string; active: boolean }[] = [
@@ -26,8 +27,9 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     <div className="app bo">
       <header className="site-header">
         <div className="wrap header-row">
-          <a className="wordmark" href={href({ name: 'demandes' })}>
-            jamystock <span className="wordmark-tag">back-office</span>
+          <a className="wordmark" href={href({ name: 'demandes' })} aria-label="JAMYSTOCK Back-Office, accueil">
+            <BrandLogo variant="blanc" size={36} tagline={false} />
+            <span className="wordmark-tag">back-office</span>
           </a>
           <nav className="main-nav" aria-label="Navigation principale">
             {nav.map((n) => (
@@ -71,7 +73,11 @@ export function Pills<T extends string>({ value, options, onChange, label }: { v
   );
 }
 
-export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'lime' | 'dark' | 'alert' }) {
+/** Couleurs fonctionnelles de la charte : accent = en préparation / à traiter, route = en cours de livraison,
+ * ok = livré, dark = stocké, alert = anomalie (rouge, jamais décoratif), neutral = annulé / archivé. */
+export type Tone = 'neutral' | 'accent' | 'route' | 'ok' | 'dark' | 'alert';
+
+export function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
   return <span className={`status ${tone}`}>{label}</span>;
 }
 
@@ -83,11 +89,13 @@ export function Thumb({ src, alt }: { src: string | null | undefined; alt: strin
   return src ? <img className="thumbimg" src={src} alt={alt} loading="lazy" /> : <span className="thumbimg empty" aria-hidden="true" />;
 }
 
-/** Ton de pastille selon le statut d'une demande : citron = à traiter par le dépôt. */
-export function orderTone(statut: string): 'neutral' | 'lime' | 'dark' | 'alert' {
-  if (statut === 'SOUMISE') return 'lime';
-  if (['REFUSEE', 'ANNULEE', 'ECHEC_LIVRAISON', 'LIVREE_AVEC_RESERVES'].includes(statut)) return 'alert';
-  if (['PLANIFIEE', 'EN_PREPARATION', 'PRETE', 'EN_LIVRAISON'].includes(statut)) return 'dark';
+/** Ton de pastille selon le statut d'une demande (couleurs fonctionnelles de la charte). */
+export function orderTone(statut: string): Tone {
+  if (['REFUSEE', 'ECHEC_LIVRAISON', 'LIVREE_AVEC_RESERVES'].includes(statut)) return 'alert';
+  if (statut === 'EN_LIVRAISON') return 'route';
+  if (['SOUMISE', 'EN_ATTENTE_VALIDATION', 'PLANIFIEE', 'EN_PREPARATION', 'PRETE'].includes(statut)) return 'accent';
+  if (['LIVREE', 'RETIREE', 'COLLECTEE', 'CLOTUREE'].includes(statut)) return 'ok';
+  if (statut === 'STOCKEE') return 'dark';
   return 'neutral';
 }
 

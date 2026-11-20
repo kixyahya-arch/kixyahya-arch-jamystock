@@ -314,7 +314,7 @@ function LaunchForm({ zone, onDone }: { zone: PlanZone; onDone: () => void }) {
 
 type InvStatut = 'EN_COURS' | 'A_ARBITRER' | 'CLOS' | 'ANNULE';
 const INV_STATUT: Record<InvStatut, string> = { EN_COURS: 'Comptage en cours', A_ARBITRER: 'Écarts à arbitrer', CLOS: 'Clos', ANNULE: 'Annulé' };
-const invTone = (s: InvStatut) => (s === 'A_ARBITRER' ? 'lime' : s === 'EN_COURS' ? 'dark' : 'neutral');
+const invTone = (s: InvStatut) => (s === 'A_ARBITRER' ? 'accent' : s === 'EN_COURS' ? 'dark' : 'neutral');
 interface InvRow {
   id: string;
   numero: string;
@@ -529,7 +529,7 @@ export function InventoryView({ id }: { id: string }) {
                   <strong>Partie {m.partie}</strong> · {m.comptes} / {m.nbEmplacements} emplacements
                   <small className="muted"> · {m.assigne ?? 'à affecter au planning'}</small>
                 </span>
-                <StatusPill label={MISSION_STATUT[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'lime' : 'neutral'} />
+                <StatusPill label={MISSION_STATUT[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'accent' : 'neutral'} />
               </li>
             ))}
           </ul>

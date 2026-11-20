@@ -205,7 +205,7 @@ function MissionCard({
         {m.volumeM3 ? ` · ${m.volumeM3.toLocaleString('fr-FR')} m³` : ''}
       </span>
       <div className="mcard-foot">
-        <StatusPill label={MISSION_STATUS[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'lime' : m.statut === 'ANOMALIE' ? 'alert' : 'neutral'} />
+        <StatusPill label={MISSION_STATUS[m.statut] ?? m.statut} tone={m.statut === 'A_AFFECTER' ? 'accent' : m.statut === 'ANOMALIE' ? 'alert' : 'neutral'} />
         {m.vehicule && <span className="veh">{m.vehicule}</span>}
       </div>
       {!m.assigneA && movable && <AssignForm mission={m} ressources={p.ressources} vehicules={p.vehicules} onDone={onAssigned} />}

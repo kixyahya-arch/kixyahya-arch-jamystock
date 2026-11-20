@@ -113,7 +113,7 @@ export function Stock({ ctx, canCorrect = false }: { ctx: BoContext; canCorrect?
                     <td>{CONDITION[a.etat] ?? a.etat}</td>
                     <td>{dateFr(a.dateEntree)}</td>
                     <td>
-                      <StatusPill label={ARTICLE_STATUS[a.statut] ?? a.statut} tone={a.statut === 'EN_STOCK' ? 'neutral' : a.statut === 'PERDU' ? 'alert' : 'dark'} />
+                      <StatusPill label={ARTICLE_STATUS[a.statut] ?? a.statut} tone={a.statut === 'EN_STOCK' ? 'dark' : a.statut === 'PERDU' ? 'alert' : 'neutral'} />
                     </td>
                   </tr>
                 ))}

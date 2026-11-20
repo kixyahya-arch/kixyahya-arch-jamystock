@@ -50,7 +50,7 @@ interface Detail {
 
 export const MOTIF: Record<string, string> = { CASSE: 'Bien cassé', RAYURE: 'Rayure ou salissure', MANQUANT: 'Bien manquant', ERREUR: 'Erreur de bien', AUTRE: 'Autre' };
 const STATUT: Record<Statut, string> = { OUVERT: 'À traiter', EN_COURS: 'En cours', RESOLU: 'Résolu', REJETE: 'Rejeté' };
-const tone = (s: Statut) => (s === 'OUVERT' ? 'lime' : s === 'EN_COURS' ? 'dark' : s === 'REJETE' ? 'alert' : 'neutral');
+const tone = (s: Statut) => (s === 'OUVERT' ? 'accent' : s === 'EN_COURS' ? 'dark' : s === 'REJETE' ? 'alert' : 'neutral');
 const euros = (c: number) => (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
 export function Disputes({ isAdmin }: { isAdmin: boolean }) {

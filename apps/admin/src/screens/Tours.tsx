@@ -312,7 +312,7 @@ function TourCard({
             {t.volumeM3 ? ` · ${t.volumeM3.toLocaleString('fr-FR')} m³ à livrer` : ''}
           </p>
         </div>
-        <StatusPill label={TOUR_STATUS[t.statut]} tone={t.statut === 'EN_COURS' ? 'lime' : t.statut === 'TERMINEE' ? 'dark' : 'neutral'} />
+        <StatusPill label={TOUR_STATUS[t.statut]} tone={t.statut === 'EN_COURS' ? 'route' : t.statut === 'TERMINEE' ? 'ok' : 'neutral'} />
       </header>
       {t.alertes.map((a) => (
         <Banner key={a} kind="error">

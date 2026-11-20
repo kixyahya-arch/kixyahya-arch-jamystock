@@ -264,17 +264,23 @@ export function renderEmail(modele: string, vars: Vars, ctx: TemplateContext, ov
   const hello = ctx.destinataire ? `Bonjour ${ctx.destinataire},` : 'Bonjour,';
   const url = s.action ? `${ctx.publicUrl}/${s.action.path}` : null;
   const text = [hello, '', ...s.lines, ...(url ? ['', `${s.action!.label} : ${url}`] : []), '', '— JAMYSTOCK', 'Stockage tracé, objet par objet.'].join('\n');
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#f4f4f2;font-family:Helvetica,Arial,sans-serif;color:#111">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f2;padding:24px 0"><tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:8px">
-<tr><td style="padding:24px 28px;border-bottom:1px solid #e6e6e2;font-size:20px;font-weight:700;letter-spacing:-0.5px">jamystock</td></tr>
+  // charte JAMYSTOCK : Encre #0A2A43, Azur #0EA5E9 → Vert frais #16C47F (dégradé 135°), Sora / Manrope avec repli
+  // sûr pour les messageries. Le logo est écrit en texte (les images SVG sont bloquées par la plupart des messageries).
+  const font = "Manrope,'Segoe UI',Helvetica,Arial,sans-serif";
+  const display = "Sora,'Segoe UI',Helvetica,Arial,sans-serif";
+  const gradient = 'background-color:#0ea5e9;background-image:linear-gradient(135deg,#0ea5e9,#16c47f)';
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;background:#eef2f6;font-family:${font};color:#0a2a43">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;padding:24px 0"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:12px;overflow:hidden">
+<tr><td style="height:6px;line-height:6px;font-size:0;${gradient}">&nbsp;</td></tr>
+<tr><td style="padding:22px 28px 18px;border-bottom:1px solid #dce3ea"><div style="font-family:${display};font-size:22px;font-weight:600;letter-spacing:-0.2px;color:#0a2a43">JAMYSTOCK</div><div style="margin-top:4px;font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#0b7a4f">Stockage &amp; logistique</div></td></tr>
 <tr><td style="padding:28px;font-size:15px;line-height:1.55">
 <p style="margin:0 0 16px">${esc(hello)}</p>
 ${s.lines.map((l) => `<p style="margin:0 0 14px">${esc(l)}</p>`).join('\n')}
-${url ? `<p style="margin:24px 0 8px"><a href="${esc(url)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:600">${esc(s.action!.label)}</a></p>
-<p style="margin:0;font-size:12px;color:#666;word-break:break-all">${esc(url)}</p>` : ''}
+${url ? `<p style="margin:24px 0 8px"><a href="${esc(url)}" style="display:inline-block;${gradient};color:#0a2a43;text-decoration:none;padding:13px 22px;border-radius:999px;font-weight:700">${esc(s.action!.label)}</a></p>
+<p style="margin:0;font-size:12px;color:#4b6478;word-break:break-all">${esc(url)}</p>` : ''}
 </td></tr>
-<tr><td style="padding:18px 28px;border-top:1px solid #e6e6e2;font-size:12px;color:#666">JAMYSTOCK · Stockage tracé, objet par objet.</td></tr>
+<tr><td style="padding:18px 28px;background:#0a2a43;font-size:12px;color:#c7d6e2"><strong style="font-family:${display};font-weight:600;color:#fff">JAMYSTOCK</strong> · Stockage tracé, objet par objet.</td></tr>
 </table></td></tr></table></body></html>`;
   return { subject: s.subject, text, html };
 }

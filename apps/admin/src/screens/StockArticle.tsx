@@ -85,7 +85,7 @@ export function StockArticle({ id }: { id: string }) {
             {f.categorie ? ` · ${f.categorie}` : ''}
           </p>
         </div>
-        <StatusPill label={ARTICLE_STATUS[f.statut] ?? f.statut} tone={f.statut === 'PERDU' ? 'alert' : f.statut === 'EN_STOCK' ? 'neutral' : 'dark'} />
+        <StatusPill label={ARTICLE_STATUS[f.statut] ?? f.statut} tone={f.statut === 'PERDU' ? 'alert' : f.statut === 'EN_STOCK' ? 'dark' : 'neutral'} />
       </section>
       {notice && <Banner kind="ok">{notice}</Banner>}
       {error && <Banner kind="error">{error}</Banner>}

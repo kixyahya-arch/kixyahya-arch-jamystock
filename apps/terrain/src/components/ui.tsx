@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { flush, subscribe, type OutboxState } from '../lib/outbox';
+import { BrandSymbol } from './Brand';
 
 /** Pastille « N actions en attente d'envoi » (§7.5), visible en permanence. */
 export function SyncBadge() {
@@ -41,7 +42,9 @@ export function Screen({ title, onBack, children, actions }: { title: string; on
             ‹
           </button>
         ) : (
-          <span className="brand">JAMYSTOCK</span>
+          <span className="brand" title="JAMYSTOCK">
+            <BrandSymbol variant="blanc" size={34} title="JAMYSTOCK" />
+          </span>
         )}
         <h1>{title}</h1>
         <SyncBadge />
