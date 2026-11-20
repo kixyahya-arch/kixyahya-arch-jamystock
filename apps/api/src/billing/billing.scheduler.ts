@@ -4,12 +4,14 @@ import { CONFIG, DATABASE } from '../common/tokens.js';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/database.js';
 import { BillingService, systemCtx } from './billing.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
 
 /**
  * Tâches de facturation (§6.1, FAC-02, FAC-03), vérifiées chaque minute :
  *  - instantané des m² à 23 h 59 (heure de Paris), avec rattrapage des jours manqués si le service dormait ;
  *  - brouillons du mois précédent le 1er à 2 h (une seule fois par mois, même après un redémarrage) ;
- *  - émission automatique des brouillons non bloqués à J+2.
+ *  - émission automatique des brouillons non bloqués à J+2 ;
+ *  - prélèvement des factures émises quand le client a enregistré une carte ou un mandat SEPA.
  * Chaque étape est idempotente : plusieurs instances ou un redémarrage ne créent pas de doublon.
  */
 @Injectable()
@@ -21,6 +23,7 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
     @Inject(CONFIG) private readonly config: AppConfig,
     @Inject(DATABASE) private readonly db: Database,
     @Inject(BillingService) private readonly billing: BillingService,
+    @Inject(PaymentsService) private readonly payments: PaymentsService,
   ) {}
 
   onApplicationBootstrap() {
@@ -66,6 +69,11 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
       });
     }
     const emises = await this.billing.autoIssue(tenantId, at);
-    return { instantanes, brouillons, emises };
+    // ADM-04 : prélèvement des factures émises sur le moyen de paiement enregistré (Stripe)
+    const prelevements = await this.payments.collectDue(tenantId).catch((e) => {
+      console.error('Prélèvements :', (e as Error).message);
+      return null;
+    });
+    return { instantanes, brouillons, emises, prelevements };
   }
 }

@@ -11,6 +11,10 @@ describe('routes de l’Espace Client', () => {
       { name: 'commandes' },
       { name: 'commande', id: '01a1e4f8-c599-7c96-b62c-ee18f9c4400f' },
       { name: 'collecte' },
+      { name: 'documents' },
+      { name: 'compte' },
+      { name: 'utilisateurs' },
+      { name: 'invitation', token: 'Abc_123-xyz' },
     ];
     for (const r of routes) expect(parse(href(r))).toEqual(r);
   });
@@ -18,6 +22,11 @@ describe('routes de l’Espace Client', () => {
   it('un lien inconnu ramène au stock', () => {
     expect(parse('#/nimporte/quoi')).toEqual({ name: 'inventaire' });
     expect(parse('')).toEqual({ name: 'inventaire' });
+  });
+
+  it('le retour de Stripe garde l’écran malgré les paramètres', () => {
+    expect(parse('#/compte?paiement=enregistre')).toEqual({ name: 'compte' });
+    expect(parse('#/documents?paiement=ok')).toEqual({ name: 'documents' });
   });
 });
 

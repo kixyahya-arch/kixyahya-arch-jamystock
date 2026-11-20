@@ -8,10 +8,16 @@ export type Route =
   | { name: 'commandes' }
   | { name: 'commande'; id: string }
   | { name: 'collecte' }
-  | { name: 'documents' };
+  | { name: 'documents' }
+  | { name: 'compte' }
+  | { name: 'utilisateurs' }
+  | { name: 'invitation'; token: string };
 
 export function parse(hash: string): Route {
-  const [, a, b] = hash.replace(/^#/, '').split('/');
+  const [, a, b] = hash.replace(/^#/, '').split('?')[0]!.split('/');
+  if (a === 'invitation' && b) return { name: 'invitation', token: b };
+  if (a === 'compte') return { name: 'compte' };
+  if (a === 'utilisateurs') return { name: 'utilisateurs' };
   if (a === 'article' && b) return { name: 'article', id: b };
   if (a === 'commandes' && b) return { name: 'commande', id: b };
   if (a === 'commandes') return { name: 'commandes' };
@@ -29,9 +35,17 @@ export function href(r: Route): string {
       return `#/commandes/${r.id}`;
     case 'inventaire':
       return '#/';
+    case 'invitation':
+      return `#/invitation/${r.token}`;
     default:
       return `#/${r.name}`;
   }
+}
+
+/** Paramètre de l'ancre (#/compte?paiement=enregistre), utilisé au retour de Stripe. */
+export function hashParam(name: string): string | null {
+  const q = window.location.hash.split('?')[1];
+  return q ? new URLSearchParams(q).get(name) : null;
 }
 
 export const go = (r: Route) => {

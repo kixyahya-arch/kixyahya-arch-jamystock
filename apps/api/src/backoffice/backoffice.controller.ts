@@ -1,12 +1,14 @@
-import { Body, Controller, Get, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { ORDER_STATUSES, ORDER_TYPES, isValidFrenchVat, isValidSiret, normalizeSiret, uuidv7 } from '@jamystock/domain';
-import { DATABASE } from '../common/tokens.js';
+import { CONFIG, DATABASE } from '../common/tokens.js';
+import type { AppConfig } from '../config.js';
+import { createInvitation } from '../accounts/invitations.js';
 import type { Database, Tx } from '../db/database.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
 import type { AuthUser } from '../auth/auth.service.js';
 import { ctxOf } from '../common/context.js';
-import { notFound, unprocessable } from '../common/errors.js';
+import { conflict, notFound, unprocessable } from '../common/errors.js';
 import { AuditService } from '../audit/audit.service.js';
 import { liveSurface } from '../client/client.controller.js';
 import { FilesService } from '../files/files.service.js';
@@ -68,7 +70,30 @@ export class BackofficeController {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(FilesService) private readonly files: FilesService,
+    @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /** Invitation du contact d'un client (CLI-01, ADM-03) ; le lien n'est renvoyé que si aucun service d'e-mail n'est configuré. */
+  private async invite(tx: Tx, user: AuthUser, utilisateurId: string, entrepriseId: string) {
+    const inv = await createInvitation(tx, { tenantId: user.tenantId, utilisateurId, entrepriseId, createdBy: user.id, invitePar: 'L’équipe JAMYSTOCK', publicUrl: this.config.publicUrl });
+    return { expireLe: inv.expireLe, ...(this.config.mail.brevoApiKey ? {} : { lien: inv.lien }) };
+  }
+
+  @Post('clients/:id/users/:userId/invite')
+  @HttpCode(200)
+  @RequirePermission('client.manage')
+  resendInvitation(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('userId') userId: string) {
+    const entrepriseId = uuid.parse(id);
+    const uid = uuid.parse(userId);
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const u = (await tx.query<{ statut: string }>('SELECT statut FROM utilisateur WHERE id = $1 AND entreprise_id = $2', [uid, entrepriseId])).rows[0];
+      if (!u) throw notFound('Utilisateur');
+      if (u.statut !== 'INVITE') throw conflict('DEJA_ACTIF', 'Cet utilisateur a déjà activé son accès');
+      const r = await this.invite(tx, user, uid, entrepriseId);
+      await this.audit.record(tx, user, { action: 'INVITATION_RENVOYEE', objet: 'utilisateur', objetId: uid, entrepriseId });
+      return r;
+    });
+  }
 
   /** Référentiels des filtres et de l'en-tête. */
   @Get('context')
@@ -229,7 +254,9 @@ export class BackofficeController {
       const e = (
         await tx.query(
           `SELECT id, nom, type, siret, tva_intracom AS "tvaIntracom", adresse_facturation AS "adresseFacturation",
-                  conditions_paiement AS "conditionsPaiement", statut, created_at AS "creeLe" FROM entreprise WHERE id = $1`,
+                  conditions_paiement AS "conditionsPaiement", statut, created_at AS "creeLe",
+                  email_facturation AS "emailFacturation", bon_de_commande AS "bonDeCommande", moyen_paiement AS "moyenPaiement",
+                  moyen_paiement_detail AS "moyenDetail" FROM entreprise WHERE id = $1`,
           [entrepriseId],
         )
       ).rows[0];
@@ -256,8 +283,8 @@ export class BackofficeController {
   }
 
   /**
-   * CLI-01 : ouverture d'un compte client. Le contact principal est créé « invité » (sans mot de passe) :
-   * l'invitation par email arrive avec les notifications (phase D).
+   * CLI-01 : ouverture d'un compte client. Le contact principal est créé « invité » (sans mot de passe) et reçoit
+   * le lien d'activation par e-mail (ADM-03).
    */
   @Post('clients')
   @RequirePermission('client.manage')
@@ -317,8 +344,9 @@ export class BackofficeController {
           ],
         );
       }
+      const invitation = await this.invite(tx, user, contactId, id);
       await this.audit.record(tx, user, { action: 'CLIENT_CREE', objet: 'entreprise', objetId: id, entrepriseId: id, apres: { ...b, contact: { ...b.contact } } });
-      return { id };
+      return { id, invitation };
     });
   }
 

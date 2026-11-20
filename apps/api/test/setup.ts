@@ -24,10 +24,10 @@ export interface TestContext {
   login: (email: string) => Promise<string>;
 }
 
-export async function bootstrap(): Promise<TestContext> {
+export async function bootstrap(env: Record<string, string> = {}): Promise<TestContext> {
   await resetDatabase();
   const data = await seed(OWNER_URL);
-  const config = loadConfig({ APP_DATABASE_URL: APP_URL, JWT_SECRET: 'test-secret-test-secret-test-secret-123', TENANT_ID: data.tenantId });
+  const config = loadConfig({ APP_DATABASE_URL: APP_URL, JWT_SECRET: 'test-secret-test-secret-test-secret-123', TENANT_ID: data.tenantId, ...env });
   const app = await createApp(config);
   await app.init();
   const http = () => request(app.getHttpServer());

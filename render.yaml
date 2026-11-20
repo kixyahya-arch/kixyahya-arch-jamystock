@@ -37,6 +37,15 @@ services:
       # Mot de passe des comptes de démonstration, demandé à la création (le dépôt est public)
       - key: DEMO_PASSWORD
         sync: false
+      # Services externes, à renseigner dans le tableau de bord (voir README) : sans eux, e-mails et paiement en ligne restent inactifs
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: CLIENT_DIST
         value: apps/client/dist
       - key: TERRAIN_DIST

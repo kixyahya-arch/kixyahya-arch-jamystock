@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { apiBlob, get, saveBlob } from '../lib/api';
+import { apiBlob, get, post, saveBlob } from '../lib/api';
+import { hashParam } from '../lib/router';
 import { dateFr, euros, type Ctx } from '../lib/types';
 import { Banner, Pills, StatusPill } from '../components/ui';
 
@@ -33,7 +34,7 @@ const title = (d: Doc) => (d.type === 'BL' ? (BL_LABEL[d.typeBl ?? ''] ?? 'Bon d
 const monthOf = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 const pathOf = (d: Doc) => `/me/documents/${d.type.toLowerCase()}/${d.id}/pdf`;
 
-export function Documents({ ctx }: { ctx: Ctx }) {
+export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [showsInvoices, setShowsInvoices] = useState(true);
   const [type, setType] = useState<Filter>('');
@@ -43,6 +44,27 @@ export function Documents({ ctx }: { ctx: Ctx }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ADM-04 : le titulaire du compte peut régler une facture en ligne (Stripe)
+  const [canPay, setCanPay] = useState(false);
+  const paidBack = hashParam('paiement') === 'ok';
+
+  useEffect(() => {
+    if (role !== 'B2B_ADMIN' && role !== 'B2C') return;
+    get<{ paiementEnLigne: boolean }>('/me/billing')
+      .then((b) => setCanPay(b.paiementEnLigne))
+      .catch(() => setCanPay(false));
+  }, [role]);
+
+  const pay = async (d: Doc) => {
+    setBusy(`pay:${d.id}`);
+    try {
+      const r = await post<{ url: string }>(`/me/invoices/${d.id}/pay`);
+      window.location.assign(r.url);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(null);
+    }
+  };
 
   useEffect(() => {
     const p = new URLSearchParams();
@@ -103,6 +125,7 @@ export function Documents({ ctx }: { ctx: Ctx }) {
         </p>
       </section>
 
+      {paidBack && <Banner kind="ok">Paiement transmis : la facture passe en « Payée » dès que la banque l’a confirmé.</Banner>}
       {showsInvoices && unpaid.length > 0 && (
         <Banner kind="info">
           {unpaid.length === 1 ? 'Une facture est' : `${unpaid.length} factures sont`} à régler pour un total de {euros(unpaid.reduce((s, d) => s + (d.totalTtcCents ?? 0), 0))} TTC.
@@ -198,6 +221,11 @@ export function Documents({ ctx }: { ctx: Ctx }) {
                     <StatusPill label={INVOICE_STATUS[d.statut] ?? d.statut} tone={d.statut === 'EMISE' ? 'lime' : d.statut === 'EN_RETARD' ? 'alert' : 'neutral'} />
                   )}
                   {d.type === 'FACTURE' && d.statut === 'EMISE' && d.echeance && <span className="doc-date">avant le {dateFr(d.echeance)}</span>}
+                  {canPay && d.type === 'FACTURE' && (d.statut === 'EMISE' || d.statut === 'EN_RETARD') && (
+                    <button type="button" className="btn primary small" disabled={!!busy} onClick={() => void pay(d)}>
+                      {busy === `pay:${d.id}` ? '…' : 'Payer en ligne'}
+                    </button>
+                  )}
                 </span>
                 <button type="button" className="btn small" disabled={!!busy} onClick={() => void download(d)}>
                   {busy === key(d) ? '…' : 'PDF'}

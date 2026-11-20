@@ -10,6 +10,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'commandes' }, label: 'Commandes', active: route.name === 'commandes' || route.name === 'commande' },
     { r: { name: 'collecte' }, label: 'Demander une collecte', active: route.name === 'collecte' },
     { r: { name: 'documents' }, label: 'Documents', active: route.name === 'documents' },
+    ...(session.user?.role === 'B2B_ADMIN' ? [{ r: { name: 'utilisateurs' } as Route, label: 'Utilisateurs', active: route.name === 'utilisateurs' }] : []),
   ];
   return (
     <div className="app">
@@ -26,9 +27,9 @@ export function Shell({ session, route, onLogout, children }: { session: Session
             ))}
           </nav>
           <div className="header-actions">
-            <span className="who" title={session.user?.email}>
+            <a className="who" title={`${session.user?.email ?? ''} · Mon compte`} href={href({ name: 'compte' })} aria-current={route.name === 'compte' ? 'page' : undefined}>
               {session.user?.nom}
-            </span>
+            </a>
             <button type="button" className="btn ghost small" onClick={onLogout}>
               Se déconnecter
             </button>
@@ -48,6 +49,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
               <a href={href({ name: 'commandes' })}>Commandes</a>
               <a href={href({ name: 'collecte' })}>Collecte</a>
               <a href={href({ name: 'documents' })}>Documents</a>
+              <a href={href({ name: 'compte' })}>Mon compte</a>
             </div>
             <div>
               <h4>JAMYSTOCK</h4>

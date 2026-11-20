@@ -39,7 +39,7 @@ describe('facturation de démonstration', () => {
 
   it('les tâches planifiées ne refont rien et l’instantané du jour suit la veille', async () => {
     const r = await t.app.get(BillingScheduler).runFor(t.data.tenantId, NOW);
-    expect(r).toEqual({ instantanes: 0, brouillons: null, emises: [] });
+    expect(r).toEqual({ instantanes: 0, brouillons: null, emises: [], prelevements: { tentes: 0, refuses: 0 } });
   });
 
   it('le client retrouve ses factures dans ses documents', async () => {

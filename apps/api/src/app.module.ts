@@ -26,6 +26,11 @@ import { WarehouseController } from './warehouse/warehouse.controller.js';
 import { DocumentsController } from './billing/documents.controller.js';
 import { BillingService } from './billing/billing.service.js';
 import { BillingScheduler } from './billing/billing.scheduler.js';
+import { AccountsController } from './accounts/accounts.controller.js';
+import { NotificationsController } from './notifications/notifications.controller.js';
+import { NotificationsService } from './notifications/notifications.service.js';
+import { PaymentsController } from './payments/payments.controller.js';
+import { PaymentsService } from './payments/payments.service.js';
 
 /** Monolithe modulaire (§7.1) : un module Nest par domaine métier au fil des phases. */
 @Module({})
@@ -33,7 +38,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },
@@ -45,6 +50,8 @@ export class AppModule {
         FilesService,
         BillingService,
         BillingScheduler,
+        NotificationsService,
+        PaymentsService,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
       ],

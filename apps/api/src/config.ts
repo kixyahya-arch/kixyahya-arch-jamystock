@@ -12,6 +12,12 @@ export interface AppConfig {
   frontends: { client?: string; terrain?: string; admin?: string };
   /** Tâches de facturation planifiées (instantanés, brouillons, émission) : actives en production, ou BILLING_SCHEDULER=on */
   billingScheduler: boolean;
+  /** Adresse publique de l'Espace Client, pour les liens des e-mails (Render la fournit dans RENDER_EXTERNAL_URL). */
+  publicUrl: string;
+  /** Envoi des e-mails (§6.3) : Brevo si une clé est fournie, sinon les messages restent consultables dans le Back-Office. */
+  mail: { brevoApiKey?: string; fromEmail: string; fromName: string; worker: boolean };
+  /** ADM-04 : paiement par Stripe (carte, prélèvement SEPA). Sans clé, seul le virement est proposé. */
+  stripe: { secretKey?: string; webhookSecret?: string; apiBase: string };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -29,5 +35,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     storageDir: env.STORAGE_DIR ?? '.storage',
     frontends: { client: env.CLIENT_DIST || undefined, terrain: env.TERRAIN_DIST || undefined, admin: env.ADMIN_DIST || undefined },
     billingScheduler: env.BILLING_SCHEDULER ? env.BILLING_SCHEDULER === 'on' : env.NODE_ENV === 'production' || env.RENDER === 'true',
+    publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+    mail: {
+      brevoApiKey: env.BREVO_API_KEY || undefined,
+      fromEmail: env.MAIL_FROM || 'no-reply@jamystock.fr',
+      fromName: env.MAIL_FROM_NAME || 'JAMYSTOCK',
+      worker: env.MAIL_WORKER ? env.MAIL_WORKER === 'on' : env.NODE_ENV === 'production' || env.RENDER === 'true',
+    },
+    stripe: { secretKey: env.STRIPE_SECRET_KEY || undefined, webhookSecret: env.STRIPE_WEBHOOK_SECRET || undefined, apiBase: env.STRIPE_API_BASE || 'https://api.stripe.com' },
   };
 }

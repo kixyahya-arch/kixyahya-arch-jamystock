@@ -18,6 +18,7 @@ describe('routes du Back-Office', () => {
       { name: 'tarifs' },
       { name: 'surfaces' },
       { name: 'surfaces', client: 'c1' },
+      { name: 'emails' },
     ] as const) {
       expect(parse(href(r))).toEqual(r);
     }

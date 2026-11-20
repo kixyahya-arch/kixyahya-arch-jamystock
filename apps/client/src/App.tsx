@@ -10,6 +10,9 @@ import { CartView } from './screens/CartView';
 import { OrderView, Orders } from './screens/Orders';
 import { Collection } from './screens/Collection';
 import { Documents } from './screens/Documents';
+import { Invitation } from './screens/Invitation';
+import { Users } from './screens/Users';
+import { Account } from './screens/Account';
 import { Banner, Shell } from './components/ui';
 
 const CLIENT_ROLES = ['B2B_ADMIN', 'B2B_USER', 'B2C'];
@@ -36,6 +39,8 @@ export function App() {
       .catch((e) => setError((e as Error).message));
   }, [session, role]);
 
+  // ADM-03 : le lien d'invitation s'ouvre sans session (et remplace une session ouverte sur cet appareil)
+  if (route.name === 'invitation') return <Invitation token={route.token} onLogged={setSession} />;
   if (!session) return <Login onLogged={setSession} />;
   const onLogout = () => void logout().then(() => setSession(null));
   if (!CLIENT_ROLES.includes(role)) {
@@ -65,7 +70,11 @@ export function App() {
       ) : route.name === 'collecte' ? (
         <Collection ctx={ctx} role={role} />
       ) : route.name === 'documents' ? (
-        <Documents ctx={ctx} />
+        <Documents key={window.location.hash} ctx={ctx} role={role} />
+      ) : route.name === 'compte' ? (
+        <Account key={window.location.hash} session={session} />
+      ) : route.name === 'utilisateurs' && role === 'B2B_ADMIN' ? (
+        <Users />
       ) : (
         <Inventory ctx={ctx} canOrder />
       )}
