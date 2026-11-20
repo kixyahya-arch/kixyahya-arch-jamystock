@@ -5,13 +5,15 @@ import type { AppConfig } from '../config.js';
 import type { Database } from '../db/database.js';
 import { BillingService, systemCtx } from './billing.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
+import { DunningService } from './dunning.service.js';
 
 /**
  * Tâches de facturation (§6.1, FAC-02, FAC-03), vérifiées chaque minute :
  *  - instantané des m² à 23 h 59 (heure de Paris), avec rattrapage des jours manqués si le service dormait ;
  *  - brouillons du mois précédent le 1er à 2 h (une seule fois par mois, même après un redémarrage) ;
  *  - émission automatique des brouillons non bloqués à J+2 ;
- *  - prélèvement des factures émises quand le client a enregistré une carte ou un mandat SEPA.
+ *  - prélèvement des factures émises quand le client a enregistré une carte ou un mandat SEPA ;
+ *  - passage en retard des factures échues et relances à J+7, J+15, J+30 (FAC-05).
  * Chaque étape est idempotente : plusieurs instances ou un redémarrage ne créent pas de doublon.
  */
 @Injectable()
@@ -24,6 +26,7 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
     @Inject(DATABASE) private readonly db: Database,
     @Inject(BillingService) private readonly billing: BillingService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
+    @Inject(DunningService) private readonly dunning: DunningService,
   ) {}
 
   onApplicationBootstrap() {
@@ -74,6 +77,10 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
       console.error('Prélèvements :', (e as Error).message);
       return null;
     });
-    return { instantanes, brouillons, emises, prelevements };
+    const relances = await this.dunning.run(tenantId, at).catch((e) => {
+      console.error('Relances :', (e as Error).message);
+      return null;
+    });
+    return { instantanes, brouillons, emises, prelevements, relances };
   }
 }

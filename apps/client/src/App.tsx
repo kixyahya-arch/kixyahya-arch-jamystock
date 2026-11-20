@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { get, getSession, logout, onSessionChange, type Session } from './lib/api';
+import { get, getSession, logout, onSessionChange, startSupport, type Session } from './lib/api';
 import { loadCarts } from './lib/cart';
 import { useRoute } from './lib/router';
 import type { Ctx } from './lib/types';
@@ -41,8 +41,15 @@ export function App() {
 
   // ADM-03 : le lien d'invitation s'ouvre sans session (et remplace une session ouverte sur cet appareil)
   if (route.name === 'invitation') return <Invitation token={route.token} onLogged={setSession} />;
+  // CLI-02 : lien « voir son espace » ouvert depuis le Back-Office
+  if (route.name === 'support') return <SupportStart token={route.token} onLogged={setSession} />;
   if (!session) return <Login onLogged={setSession} />;
-  const onLogout = () => void logout().then(() => setSession(null));
+  const onLogout = () =>
+    void logout().then(() => {
+      setSession(null);
+      // l'onglet de support a été ouvert par le Back-Office : on le referme si le navigateur l'accepte
+      if (session.support) window.close();
+    });
   if (!CLIENT_ROLES.includes(role)) {
     return (
       <div className="login">
@@ -79,5 +86,24 @@ export function App() {
         <Inventory ctx={ctx} canOrder />
       )}
     </Shell>
+  );
+}
+
+function SupportStart({ token, onLogged }: { token: string; onLogged: (s: Session) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    startSupport(token)
+      .then((s) => {
+        // le jeton ne reste ni dans la barre d'adresse ni dans l'historique
+        window.history.replaceState(null, '', `${window.location.pathname}#/`);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+        onLogged(s);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [token, onLogged]);
+  return (
+    <div className="login">
+      {error ? <Banner kind="error">Lien de support expiré ou invalide : rouvrez-le depuis le Back-Office. ({error})</Banner> : <p className="hint">Ouverture de l’espace client…</p>}
+    </div>
   );
 }

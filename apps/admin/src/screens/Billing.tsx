@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { get, openPdf, post } from '../lib/api';
+import { apiBlob, get, openPdf, post, put } from '../lib/api';
 import { go, href } from '../lib/router';
 import type { BoContext } from '../lib/types';
 import { AUDIT_ACTION, INVOICE_STATUS, LINE_TYPE, SNAPSHOT_SOURCE, dateFr, dateShort, euros, m2, monthFr, parseEuros, previousMonth } from '../lib/labels';
@@ -28,6 +28,7 @@ export interface InvoiceRow {
   payeLe: string | null;
   origineNumero: string | null;
   enRetard: boolean;
+  relanceNiveau?: number;
 }
 
 interface BillingSummary {
@@ -173,12 +174,20 @@ export function Invoices({ ctx }: { ctx: BoContext }) {
             disabled={busy}
             onClick={() =>
               void run(async () => {
-                const r = await post<{ instantanes: number; brouillons: { mois: string; crees: number } | null; emises: string[]; prelevements: { tentes: number; refuses: number } | null }>('/bo/billing/run');
+                const r = await post<{
+                  instantanes: number;
+                  brouillons: { mois: string; crees: number } | null;
+                  emises: string[];
+                  prelevements: { tentes: number; refuses: number } | null;
+                  relances: { enRetard: number; relances: number } | null;
+                }>('/bo/billing/run');
                 const parts = [
                   r.instantanes ? `${r.instantanes} instantané(s) rattrapé(s)` : '',
                   r.brouillons ? `${r.brouillons.crees} brouillon(s) pour ${monthFr(r.brouillons.mois)}` : '',
                   r.emises.length ? `émises : ${r.emises.join(', ')}` : '',
                   r.prelevements?.tentes ? `${r.prelevements.tentes} prélèvement(s) lancé(s)${r.prelevements.refuses ? `, ${r.prelevements.refuses} refusé(s)` : ''}` : '',
+                  r.relances?.enRetard ? `${r.relances.enRetard} facture(s) passée(s) en retard` : '',
+                  r.relances?.relances ? `${r.relances.relances} relance(s) envoyée(s)` : '',
                 ].filter(Boolean);
                 return parts.length ? `Tâches lancées : ${parts.join(' ; ')}.` : 'Tâches lancées : tout était déjà à jour.';
               })
@@ -264,6 +273,7 @@ export function Invoices({ ctx }: { ctx: BoContext }) {
                         : r.type === 'FACTURE' && r.statut !== 'ANNULEE'
                           ? `Échéance ${dateShort(r.echeance)}`
                           : `Émis le ${dateShort(r.emiseLe)}`}
+                    {r.relanceNiveau && ['EMISE', 'EN_RETARD'].includes(r.statut) ? <div className="muted">Relance {r.relanceNiveau}/3 envoyée</div> : null}
                   </td>
                   <td>
                     <StatusPill label={statusLabel(r)} tone={invoiceTone(r)} />
@@ -274,7 +284,120 @@ export function Invoices({ ctx }: { ctx: BoContext }) {
           </table>
         </div>
       )}
+
+      <div className="bo-grid-2">
+        <AccountingExport today={ctx.today} />
+        <DunningSettingsPanel />
+      </div>
     </>
+  );
+}
+
+/** FAC-06 : fichier des écritures pour l'expert-comptable (FEC normalisé ou CSV pour tableur). */
+function AccountingExport({ today }: { today: string }) {
+  const [du, setDu] = useState(`${previousMonth(today)}-01`);
+  const [au, setAu] = useState(() => {
+    const d = new Date(`${today.slice(0, 7)}-01T12:00:00Z`);
+    d.setUTCDate(0);
+    return d.toISOString().slice(0, 10);
+  });
+  const [busy, setBusy] = useState<'' | 'fec' | 'csv'>('');
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const download = async (format: 'fec' | 'csv') => {
+    setBusy(format);
+    setMsg(null);
+    try {
+      const blob = await apiBlob(`/bo/billing/export?du=${du}&au=${au}&format=${format}`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = format === 'fec' ? `FEC-${du}-${au}.txt` : `ecritures-${du}-${au}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setMsg({ kind: 'ok', text: 'Fichier téléchargé.' });
+    } catch (e) {
+      setMsg({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy('');
+    }
+  };
+  return (
+    <section className="panel">
+      <h2>Export comptable</h2>
+      <p className="hint">Factures et avoirs émis au journal des ventes (411, 706, 4457 par taux de TVA), règlements reçus au journal de banque (512). Chaque écriture est équilibrée.</p>
+      <div className="inline-form">
+        <label className="inline">
+          Du <input type="date" value={du} max={au} onChange={(e) => setDu(e.target.value)} />
+        </label>
+        <label className="inline">
+          au <input type="date" value={au} min={du} onChange={(e) => setAu(e.target.value)} />
+        </label>
+      </div>
+      <div className="row-actions">
+        <button type="button" className="btn primary" disabled={!!busy || !du || !au} onClick={() => void download('fec')}>
+          {busy === 'fec' ? 'Préparation…' : 'Fichier FEC'}
+        </button>
+        <button type="button" className="btn" disabled={!!busy || !du || !au} onClick={() => void download('csv')}>
+          {busy === 'csv' ? 'Préparation…' : 'CSV pour tableur'}
+        </button>
+      </div>
+      {msg && <p className={msg.kind === 'ok' ? 'hint' : 'small alert-text'}>{msg.text}</p>}
+    </section>
+  );
+}
+
+interface DunningSettings {
+  actives: boolean;
+  blocageRestitutions: boolean;
+}
+
+/** FAC-05 : relances automatiques et blocage optionnel des restitutions. */
+function DunningSettingsPanel() {
+  const [s, setS] = useState<DunningSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    get<{ relances: DunningSettings }>('/bo/billing/settings')
+      .then((r) => setS(r.relances))
+      .catch((e) => setError((e as Error).message));
+  }, []);
+  const save = async (next: DunningSettings) => {
+    setBusy(true);
+    try {
+      const r = await put<{ relances: DunningSettings }>('/bo/billing/settings', { relances: next });
+      setS(r.relances);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel">
+      <h2>Relances des impayés</h2>
+      {!s ? (
+        <p className="hint">{error ?? 'Chargement…'}</p>
+      ) : (
+        <>
+          <label className="check">
+            <input type="checkbox" checked={s.actives} disabled={busy} onChange={(e) => void save({ ...s, actives: e.target.checked })} />
+            Relancer par e-mail 7, 15 et 30 jours après l’échéance
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={s.blocageRestitutions} disabled={busy} onChange={(e) => void save({ ...s, blocageRestitutions: e.target.checked })} />
+            Suspendre les restitutions d’un client impayé depuis plus de 30 jours
+          </label>
+          <p className="hint small">
+            Le message part au contact facturation du client, à défaut à ses administrateurs. La suspension des restitutions repose sur le droit de rétention : faites-la valider par votre conseil avant de
+            l’activer.
+          </p>
+          {error && <p className="small alert-text">{error}</p>}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -313,6 +436,8 @@ interface InvoiceDetail extends InvoiceRow {
   paiements: { moyen: string; montantCents: number; date: string; reference: string | null }[];
   jours: Day[];
   historique: { action: string; motif: string | null; le: string; acteur: string | null }[];
+  relances: { niveau: number; manuelle: boolean; envoyeeLe: string; destinataires: number; par: string | null }[];
+  derniereRelanceLe: string | null;
 }
 
 export function InvoiceView({ id }: { id: string }) {
@@ -540,6 +665,36 @@ export function InvoiceView({ id }: { id: string }) {
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+          {f.type === 'FACTURE' && (['EMISE', 'EN_RETARD'].includes(f.statut) || f.relances.length > 0) && (
+            <section className="panel">
+              <h2>Relances</h2>
+              {f.relances.length === 0 ? (
+                <p className="hint">Aucune relance pour l’instant. Les relances automatiques partent 7, 15 et 30 jours après l’échéance.</p>
+              ) : (
+                <ul className="plain">
+                  {f.relances.map((r, i) => (
+                    <li key={i}>
+                      <strong>{r.manuelle ? 'Relance manuelle' : `Relance ${r.niveau}/3`}</strong>
+                      <span className="muted">
+                        {dateShort(r.envoyeeLe)} · {r.destinataires} destinataire{r.destinataires > 1 ? 's' : ''}
+                        {r.par ? ` · ${r.par}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {['EMISE', 'EN_RETARD'].includes(f.statut) && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => void act(() => post<{ destinataires: number }>(`/bo/billing/invoices/${f.id}/remind`), (r) => `Relance envoyée à ${(r as { destinataires: number }).destinataires} destinataire(s).`)}
+                >
+                  Relancer maintenant
+                </button>
+              )}
             </section>
           )}
           {f.paiements.length > 0 && (

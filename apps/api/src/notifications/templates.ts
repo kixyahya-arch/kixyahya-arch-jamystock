@@ -17,7 +17,7 @@ export interface TemplateContext {
 type Vars = Record<string, unknown>;
 
 /** Messages transactionnels : envoyés quelles que soient les préférences de l'utilisateur (§6.3). */
-export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU']);
+export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU', 'RELANCE_IMPAYE']);
 
 /** Événements réglables par l'utilisateur dans « Mon compte ». */
 export const OPTIONAL_EVENTS: { modele: string; libelle: string }[] = [
@@ -106,6 +106,20 @@ function spec(modele: string, v: Vars): Spec | null {
         ],
         action: { label: 'Régler la facture', path: '#/documents' },
       };
+    case 'RELANCE_IMPAYE': {
+      const lvl = Number(v.niveau ?? 0);
+      return {
+        subject: lvl >= 3 ? `Dernier rappel : facture ${v.numero} impayée` : `Rappel : facture ${v.numero} en attente de règlement`,
+        lines: [
+          `Sauf erreur de notre part, la facture ${v.numero} arrivée à échéance le ${dateFr(v.echeance)} n’est pas encore réglée${v.joursRetard ? ` (${v.joursRetard} jours de retard)` : ''}.`,
+          `Montant restant dû : ${euros(v.resteCents)} TTC.`,
+          v.blocage
+            ? 'Sans règlement de votre part, les prochaines restitutions de biens seront suspendues. Contactez-nous si un point bloque.'
+            : 'Vous pouvez la régler en ligne depuis votre Espace Client. Si le paiement est déjà parti, merci de ne pas tenir compte de ce message.',
+        ],
+        action: { label: 'Régler la facture', path: '#/documents' },
+      };
+    }
     case 'PAIEMENT_RECU':
       return { subject: `Paiement reçu : facture ${v.numero}`, lines: [`Nous avons bien reçu votre paiement de ${euros(v.montantCents)} pour la facture ${v.numero}. Merci.`], action: { label: 'Mes documents', path: '#/documents' } };
     default:

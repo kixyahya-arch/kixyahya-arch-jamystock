@@ -6,6 +6,7 @@ import {
   isClientEditable,
   isClientRole,
   isLateCancellation,
+  parisClock,
   suggestVehicle,
   uuidv7,
   volumeM3,
@@ -17,6 +18,7 @@ import type { Database, Tx } from '../db/database.js';
 import type { AuthUser } from '../auth/auth.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { ctxOf } from '../common/context.js';
+import { blockingInvoices } from '../billing/dunning.service.js';
 import { conflict, forbidden, notFound, unprocessable } from '../common/errors.js';
 
 export interface OrderRow {
@@ -183,6 +185,16 @@ export class OrdersService {
   // ---------------------------------------------------------------- soumission (CMD-02 à CMD-05, §4.2)
 
   async submit(user: AuthUser, orderId: string, input: SubmitInput, now = new Date()) {
+    // FAC-05 : blocage optionnel des restitutions quand une facture est impayée depuis plus de 30 jours
+    if (user.entrepriseId) {
+      const unpaid = await this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, (tx) => blockingInvoices(tx, user.entrepriseId!, parisClock(now).date));
+      if (unpaid.length) {
+        throw conflict(
+          'IMPAYE',
+          `Restitution suspendue : ${unpaid.length > 1 ? 'les factures' : 'la facture'} ${unpaid.join(', ')} ${unpaid.length > 1 ? 'sont impayées' : 'est impayée'} depuis plus de 30 jours. Réglez-la depuis vos documents ou contactez-nous.`,
+        );
+      }
+    }
     return this.db.tx(ctxOf(user), async (tx) => {
       const order = await this.load(tx, orderId, true);
       if (order.demandeur_id !== user.id) throw forbidden('Seul le demandeur peut soumettre son panier');

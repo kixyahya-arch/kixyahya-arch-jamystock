@@ -113,6 +113,7 @@ export const AUDIT_ACTION: Record<string, string> = {
   AVOIR_EMIS: 'Avoir émis',
   AVOIR_CREE: 'Avoir créé',
   FACTURE_PAYEE: 'Paiement reçu',
+  RELANCE_MANUELLE: 'Relance envoyée',
 };
 
 /** « 1 800,50 » ou « 1800.5 » → centimes ; null si illisible. */

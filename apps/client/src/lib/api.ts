@@ -4,13 +4,18 @@ const BASE = '/api/v1';
 export interface Session {
   accessToken: string;
   refreshToken: string;
-  user?: { id: string; nom: string; role: string; email: string; entrepriseId?: string | null };
+  /** CLI-02 : session ouverte par le support JAMYSTOCK, en lecture seule, limitée à cet onglet. */
+  support?: boolean;
+  user?: { id: string; nom: string; role: string; email: string; entrepriseId?: string | null; entrepriseNom?: string | null; support?: { par: string | null; expireLe: string } | null };
 }
 
 const KEY = 'jamystock.client.session';
+const SUPPORT_KEY = 'jamystock.client.support';
 
 export function loadSession(): Session | null {
   try {
+    const support = sessionStorage.getItem(SUPPORT_KEY);
+    if (support) return JSON.parse(support) as Session;
     const raw = localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as Session) : null;
   } catch {
@@ -20,7 +25,10 @@ export function loadSession(): Session | null {
 
 function saveSession(s: Session | null) {
   try {
-    if (s) localStorage.setItem(KEY, JSON.stringify(s));
+    // la session de support vit dans l'onglet seulement : elle ne remplace jamais celle du client sur cet appareil
+    if (s?.support) sessionStorage.setItem(SUPPORT_KEY, JSON.stringify(s));
+    else if (current?.support) sessionStorage.removeItem(SUPPORT_KEY);
+    else if (s) localStorage.setItem(KEY, JSON.stringify(s));
     else localStorage.removeItem(KEY);
   } catch {
     /* stockage indisponible : la session reste en mémoire */
@@ -72,6 +80,11 @@ async function parse<T>(res: Response): Promise<T> {
 let refreshing: Promise<boolean> | null = null;
 async function refresh(): Promise<boolean> {
   if (!current) return false;
+  if (current.support) {
+    // pas de renouvellement en mode support : la session s'arrête à l'expiration du jeton (30 min)
+    saveSession(null);
+    return false;
+  }
   refreshing ??= (async () => {
     try {
       const res = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: current!.refreshToken }) });
@@ -121,9 +134,25 @@ export async function publicGet<T>(path: string): Promise<T> {
   return parse<T>(await raw(path));
 }
 
+/** CLI-02 : ouvre la session de support reçue du Back-Office (jeton court, lecture seule). */
+export async function startSupport(token: string): Promise<Session> {
+  saveSession({ accessToken: token, refreshToken: '', support: true });
+  try {
+    const me = await api<Session['user']>('/auth/me');
+    if (!me?.support) throw new ApiError(401, 'UNAUTHORIZED', 'Lien de support invalide');
+    const s: Session = { accessToken: token, refreshToken: '', support: true, user: me };
+    saveSession(s);
+    return s;
+  } catch (e) {
+    if (current?.support) saveSession(null);
+    throw e;
+  }
+}
+
 export async function logout(): Promise<void> {
   const s = current;
   saveSession(null);
+  if (s?.support) return;
   if (s) await raw('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: s.refreshToken }) }).catch(() => undefined);
 }
 

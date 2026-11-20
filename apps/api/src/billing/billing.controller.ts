@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Inject, Param, Post, Put, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { addIsoDays, monthBounds, parisClock, uuidv7 } from '@jamystock/domain';
+import { addIsoDays, clientAccountCode, fecEntries, fecFile, monthBounds, parisClock, uuidv7, type AccountingInvoice, type AccountingPayment } from '@jamystock/domain';
 import { DATABASE } from '../common/tokens.js';
 import type { Database } from '../db/database.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
@@ -11,6 +11,7 @@ import { conflict, notFound, unprocessable } from '../common/errors.js';
 import { AuditService } from '../audit/audit.service.js';
 import { BillingService } from './billing.service.js';
 import { BillingScheduler } from './billing.scheduler.js';
+import { DunningService, dunningSettings } from './dunning.service.js';
 
 const uuid = z.string().uuid();
 const isoDate = z.string().date();
@@ -68,6 +69,7 @@ export class BillingController {
     @Inject(BillingService) private readonly billing: BillingService,
     @Inject(BillingScheduler) private readonly scheduler: BillingScheduler,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(DunningService) private readonly dunning: DunningService,
   ) {}
 
   /** Indicateurs de l'écran Facturation. */
@@ -107,7 +109,7 @@ export class BillingController {
                 f.periode_debut AS "periodeDebut", f.periode_fin AS "periodeFin", f.m2_factures AS "m2Factures",
                 f.total_ht_cents AS "totalHtCents", f.total_ttc_cents AS "totalTtcCents", f.emise_le AS "emiseLe", f.echeance,
                 f.emission_prevue AS "emissionPrevue", f.bloquee, f.motif_blocage AS "motifBlocage", f.paye_le AS "payeLe",
-                o.numero AS "origineNumero",
+                o.numero AS "origineNumero", f.relance_niveau AS "relanceNiveau",
                 (f.type = 'FACTURE' AND f.statut IN ('EMISE','EN_RETARD') AND f.echeance < $1) AS "enRetard"
            FROM facture f JOIN entreprise e ON e.id = f.entreprise_id LEFT JOIN facture o ON o.id = f.facture_origine_id
           WHERE ($2::text IS NULL OR ($2 = 'IMPAYEE' AND f.type = 'FACTURE' AND f.statut IN ('EMISE','EN_RETARD')) OR f.statut::text = $2)
@@ -133,7 +135,7 @@ export class BillingController {
                   e.conditions_paiement AS "conditionsPaiement", f.periode_debut AS "periodeDebut", f.periode_fin AS "periodeFin",
                   f.m2_factures AS "m2Factures", f.total_ht_cents AS "totalHtCents", f.tva_cents AS "tvaCents", f.total_ttc_cents AS "totalTtcCents",
                   f.emise_le AS "emiseLe", f.echeance, f.emission_prevue AS "emissionPrevue", f.bloquee, f.motif_blocage AS "motifBlocage",
-                  f.motif, f.paye_le AS "payeLe", f.empreinte_sha256 AS empreinte, f.bon_de_commande AS "bonDeCommande",
+                  f.motif, f.paye_le AS "payeLe", f.empreinte_sha256 AS empreinte, f.relance_niveau AS "relanceNiveau", f.derniere_relance_le AS "derniereRelanceLe", f.bon_de_commande AS "bonDeCommande",
                   f.facture_origine_id AS "origineId", o.numero AS "origineNumero",
                   fo.m2_inclus AS "m2Inclus", fo.prix_mensuel_cents AS "prixMensuelCents", fo.prix_m2_depassement_cents AS "prixM2DepassementCents",
                   fo.prestations_incluses AS "prestationsIncluses", fo.mode_surface AS "modeSurface"
@@ -169,7 +171,8 @@ export class BillingController {
           WHERE j.objet = 'facture' AND j.objet_id = $1 ORDER BY j.horodatage`,
         [fid],
       );
-      return { ...f, lignes: lignes.rows, avoirs: avoirs.rows, paiements: paiements.rows, jours, historique: historique.rows };
+      const relances = await this.dunning.history(tx, fid);
+      return { ...f, lignes: lignes.rows, avoirs: avoirs.rows, paiements: paiements.rows, jours, historique: historique.rows, relances };
     });
   }
 
@@ -285,6 +288,100 @@ export class BillingController {
   @RequirePermission('pricing.manage')
   run(@CurrentUser() user: AuthUser) {
     return this.scheduler.runFor(user.tenantId, new Date());
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // FAC-05 : relances des impayés
+  // ---------------------------------------------------------------------------------------------------------
+
+  /** Relance manuelle d'une facture impayée (e-mail au contact facturation ou aux administrateurs du client). */
+  @Post('invoices/:id/remind')
+  @RequirePermission('pricing.manage')
+  remind(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.dunning.remind(user, uuid.parse(id));
+  }
+
+  @Get('settings')
+  @RequirePermission('pricing.manage')
+  settings(@CurrentUser() user: AuthUser) {
+    return this.db.tx(ctxOf(user), async (tx) => ({ relances: await dunningSettings(tx) }));
+  }
+
+  /** Réglages des relances. Le blocage des restitutions reste désactivé par défaut : sa base juridique est à valider. */
+  @Put('settings')
+  @RequirePermission('pricing.manage')
+  saveSettings(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const b = z.object({ relances: z.object({ actives: z.boolean(), blocageRestitutions: z.boolean() }) }).parse(body);
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const avant = await dunningSettings(tx);
+      await tx.query(`UPDATE organisation SET parametres = jsonb_set(parametres, '{relances}', $2::jsonb), updated_at = now() WHERE id = $1`, [user.tenantId, JSON.stringify(b.relances)]);
+      await this.audit.record(tx, user, { action: 'REGLAGES_RELANCES', objet: 'organisation', objetId: user.tenantId, avant, apres: b.relances });
+      return { relances: b.relances };
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // FAC-06 : export des écritures vers l'outil comptable
+  // ---------------------------------------------------------------------------------------------------------
+
+  /**
+   * Fichier des écritures comptables d'une période : factures et avoirs émis au journal des ventes, règlements au
+   * journal de banque. `format=fec` produit le fichier normalisé (tabulations), `format=csv` la même chose en
+   * point-virgule, lisible dans un tableur.
+   */
+  @Get('export')
+  @RequirePermission('pricing.manage')
+  async exportEntries(@CurrentUser() user: AuthUser, @Query() query: unknown, @Res() res: Response) {
+    const q = z.object({ du: isoDate, au: isoDate, format: z.enum(['fec', 'csv']).default('fec') }).parse(query);
+    if (q.au < q.du) throw unprocessable('PERIODE', 'La fin de période précède le début');
+    if (q.du < addIsoDays(q.au, -400)) throw unprocessable('PERIODE', 'Exportez au plus un exercice (13 mois) à la fois');
+    const out = await this.db.tx(ctxOf(user), async (tx) => {
+      const org = (await tx.query<{ siret: string | null }>('SELECT siret FROM organisation WHERE id = $1', [user.tenantId])).rows[0];
+      const inv = await tx.query<{ id: string; numero: string; type: 'FACTURE' | 'AVOIR'; emise: string; total_ttc_cents: number; cid: string; siret: string | null; nom: string }>(
+        `SELECT f.id, f.numero, f.type, to_char(f.emise_le AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS emise, f.total_ttc_cents,
+                e.id AS cid, e.siret, e.nom
+           FROM facture f JOIN entreprise e ON e.id = f.entreprise_id
+          WHERE f.statut <> 'BROUILLON' AND (f.emise_le AT TIME ZONE 'Europe/Paris')::date BETWEEN $1 AND $2`,
+        [q.du, q.au],
+      );
+      const lines = await tx.query<{ facture_id: string; taux_tva: number; total_ht_cents: number }>(
+        'SELECT facture_id, taux_tva::float AS taux_tva, total_ht_cents FROM ligne_facture WHERE facture_id = ANY($1)',
+        [inv.rows.map((r) => r.id)],
+      );
+      const invoices: AccountingInvoice[] = inv.rows.map((r) => ({
+        numero: r.numero,
+        type: r.type,
+        emiseLe: r.emise,
+        client: { code: clientAccountCode({ siret: r.siret, id: r.cid }), nom: r.nom },
+        lignes: lines.rows.filter((l) => l.facture_id === r.id).map((l) => ({ tauxTva: Number(l.taux_tva), totalHtCents: l.total_ht_cents })),
+        totalTtcCents: r.total_ttc_cents,
+      }));
+      const pay = await tx.query<{ id: string; reference: string | null; date: string; moyen: string; montant_cents: number; numero: string; cid: string; siret: string | null; nom: string }>(
+        `SELECT p.id, p.reference_psp AS reference, p.date::text AS date, p.moyen, p.montant_cents, f.numero, e.id AS cid, e.siret, e.nom
+           FROM paiement p JOIN facture f ON f.id = p.facture_id JOIN entreprise e ON e.id = f.entreprise_id
+          WHERE p.date BETWEEN $1 AND $2`,
+        [q.du, q.au],
+      );
+      const payments: AccountingPayment[] = pay.rows.map((p) => ({
+        reference: p.reference ?? `REG-${p.id.replace(/-/g, '').slice(-8).toUpperCase()}`,
+        date: p.date,
+        factureNumero: p.numero,
+        client: { code: clientAccountCode({ siret: p.siret, id: p.cid }), nom: p.nom },
+        montantCents: p.montant_cents,
+        moyen: p.moyen,
+      }));
+      const entries = fecEntries(invoices, payments);
+      await this.audit.record(tx, user, { action: 'EXPORT_COMPTABLE', objet: 'facture', apres: { du: q.du, au: q.au, format: q.format, factures: invoices.length, reglements: payments.length } });
+      return { siren: (org?.siret ?? '').slice(0, 9), entries };
+    });
+    const body = fecFile(out.entries, q.format === 'fec' ? '\t' : ';');
+    const name = q.format === 'fec' ? `${out.siren || '000000000'}FEC${q.au.replace(/-/g, '')}.txt` : `ecritures-${q.du}-${q.au}.csv`;
+    res.setHeader('Content-Type', q.format === 'fec' ? 'text/plain; charset=utf-8' : 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Ecritures', String(out.entries.length));
+    // BOM pour qu'Excel lise les accents du CSV ; le FEC reste en UTF-8 sans BOM
+    res.send(q.format === 'csv' ? `\uFEFF${body}` : body);
   }
 
   // ---------------------------------------------------------------------------------------------------------

@@ -196,6 +196,17 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
   - E-mails (§6.3) : file d'envoi avec reprises, modèles pour l'invitation, les commandes, la livraison, la mise en stock,
     la facture et les paiements. Chacun règle ses préférences dans « Mon compte ». Le Back-Office montre chaque message
     et son aperçu.
+- **E. Exploitation** (fait) :
+  - Relances (FAC-05) : une facture échue passe « en retard », puis le client reçoit un rappel à J+7, J+15 et J+30
+    (un seul par palier, même après une panne), au contact facturation ou à défaut aux administrateurs. Relance manuelle
+    depuis la fiche facture. Option, désactivée par défaut, qui suspend les restitutions après 30 jours d'impayé
+    (droit de rétention à faire valider).
+  - Export comptable (FAC-06) : fichier des écritures (FEC normalisé ou CSV) d'une période, ventes au journal VE
+    (411 / 706 / 4457 par taux) et règlements au journal BQ (512 / 411), chaque écriture équilibrée.
+  - Connexion « en tant que » (CLI-02) : depuis la fiche client, le Super Admin ouvre l'Espace Client d'un utilisateur
+    dans un nouvel onglet, en lecture seule, 30 minutes, avec un motif tracé dans l'audit et un bandeau visible.
+  - Pilotage (CLI-03) : remplissage des dépôts, CA récurrent, surface occupée sur 60 jours, missions du jour et
+    retards, rechargé toutes les 15 minutes et exportable en CSV.
 
 ### Variables d'environnement des services externes
 

@@ -12,9 +12,24 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     { r: { name: 'documents' }, label: 'Documents', active: route.name === 'documents' },
     ...(session.user?.role === 'B2B_ADMIN' ? [{ r: { name: 'utilisateurs' } as Route, label: 'Utilisateurs', active: route.name === 'utilisateurs' }] : []),
   ];
+  const support = session.support ? session.user?.support : null;
   return (
     <div className="app">
       <header className="site-header">
+        {support && (
+          <div className="support-banner" role="status">
+            <div className="wrap support-row">
+              <span>
+                <strong>Mode support</strong> · {support.par ?? 'JAMYSTOCK'} voit l’espace de {session.user?.nom}
+                {session.user?.entrepriseNom ? ` (${session.user.entrepriseNom})` : ''} en lecture seule, jusqu’à{' '}
+                {new Date(support.expireLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })}.
+              </span>
+              <button type="button" className="btn small" onClick={onLogout}>
+                Quitter
+              </button>
+            </div>
+          </div>
+        )}
         <div className="wrap header-row">
           <a className="wordmark" href={href({ name: 'inventaire' })}>
             jamystock
@@ -30,9 +45,11 @@ export function Shell({ session, route, onLogout, children }: { session: Session
             <a className="who" title={`${session.user?.email ?? ''} · Mon compte`} href={href({ name: 'compte' })} aria-current={route.name === 'compte' ? 'page' : undefined}>
               {session.user?.nom}
             </a>
-            <button type="button" className="btn ghost small" onClick={onLogout}>
-              Se déconnecter
-            </button>
+            {!support && (
+              <button type="button" className="btn ghost small" onClick={onLogout}>
+                Se déconnecter
+              </button>
+            )}
             <a className="btn primary small" href={href({ name: 'panier' })}>
               Panier{count > 0 && <span className="count">{count}</span>}
             </a>

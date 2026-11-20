@@ -15,7 +15,12 @@ export interface AuthUser {
   role: Role;
   entrepriseId: string | null;
   sessionVersion: number;
+  /** CLI-02 : session ouverte par un Super Admin « en tant que » ce client (lecture seule). */
+  impersonation?: { by: string; sv: number; exp: number };
 }
+
+/** Durée d'une session « en tant que » (CLI-02). */
+export const IMPERSONATION_TTL_SECONDS = 30 * 60;
 
 export interface TokenPair {
   accessToken: string;
@@ -119,12 +124,14 @@ export class AuthService {
   async verifyAccessToken(token: string): Promise<AuthUser> {
     try {
       const { payload } = await jwtVerify(token, this.key, { algorithms: ['HS256'] });
+      const imp = payload.imp as { by: string; sv: number } | undefined;
       return {
         id: payload.sub as string,
         tenantId: payload.tid as string,
         role: payload.role as Role,
         entrepriseId: (payload.eid as string | null) ?? null,
         sessionVersion: payload.sv as number,
+        ...(imp ? { impersonation: { by: imp.by, sv: imp.sv, exp: payload.exp as number } } : {}),
       };
     } catch {
       throw unauthorized('Jeton invalide ou expiré');
@@ -138,6 +145,28 @@ export class AuthService {
     );
     const row = r.rows[0];
     if (!row || row.statut !== 'ACTIF' || row.session_version !== user.sessionVersion) throw unauthorized('Session révoquée');
+    if (user.impersonation) {
+      // la session « en tant que » tombe aussi si le Super Admin qui l'a ouverte est déconnecté ou désactivé
+      const a = await this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, (tx) =>
+        tx.query<{ statut: string; session_version: number; role: string }>('SELECT statut, session_version, role FROM utilisateur WHERE id = $1', [user.impersonation!.by]),
+      );
+      const admin = a.rows[0];
+      if (!admin || admin.statut !== 'ACTIF' || admin.role !== 'SUPER_ADMIN' || admin.session_version !== user.impersonation.sv) throw unauthorized('Session de support révoquée');
+    }
+  }
+
+  /**
+   * CLI-02 : jeton d'accès « en tant que » un utilisateur client, pour le support. Court (30 min), sans jeton de
+   * rafraîchissement, et limité à la lecture par la garde. L'appelant trace l'ouverture dans l'audit.
+   */
+  async impersonate(admin: AuthUser, target: AuthUser): Promise<{ accessToken: string; expiresIn: number }> {
+    const accessToken = await new SignJWT({ tid: target.tenantId, role: target.role, eid: target.entrepriseId, sv: target.sessionVersion, imp: { by: admin.id, sv: admin.sessionVersion } })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(target.id)
+      .setIssuedAt()
+      .setExpirationTime(`${IMPERSONATION_TTL_SECONDS}s`)
+      .sign(this.key);
+    return { accessToken, expiresIn: IMPERSONATION_TTL_SECONDS };
   }
 
   private async issue(user: AuthUser, famille: string, deviceId?: string): Promise<TokenPair> {
@@ -159,7 +188,7 @@ export class AuthService {
   }
 }
 
-function toAuthUser(row: Pick<UserRow, 'id' | 'tenant_id' | 'role' | 'entreprise_id' | 'session_version'>): AuthUser {
+export function toAuthUser(row: Pick<UserRow, 'id' | 'tenant_id' | 'role' | 'entreprise_id' | 'session_version'>): AuthUser {
   return { id: row.id, tenantId: row.tenant_id, role: row.role, entrepriseId: row.entreprise_id, sessionVersion: row.session_version };
 }
 

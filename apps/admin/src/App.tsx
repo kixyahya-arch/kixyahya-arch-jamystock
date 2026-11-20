@@ -7,6 +7,7 @@ import { Dashboard } from './screens/Dashboard';
 import { OrderView } from './screens/OrderView';
 import { PlanningView } from './screens/Planning';
 import { ClientView, Clients, NewClient } from './screens/Clients';
+import { Pilotage } from './screens/Pilotage';
 import { Stock } from './screens/Stock';
 import { StockArticle } from './screens/StockArticle';
 import { DepotView, Depots } from './screens/Warehouse';
@@ -86,6 +87,8 @@ export function App() {
         <Pricing ctx={ctx} />
       ) : route.name === 'surfaces' ? (
         <Surfaces ctx={ctx} client={route.client} />
+      ) : route.name === 'pilotage' ? (
+        isAdmin ? <Pilotage /> : <Banner kind="info">Le tableau de bord de pilotage est réservé au Super Admin.</Banner>
       ) : route.name === 'emails' ? (
         isAdmin ? <Emails /> : <Banner kind="info">Le suivi des e-mails est réservé au Super Admin.</Banner>
       ) : (
