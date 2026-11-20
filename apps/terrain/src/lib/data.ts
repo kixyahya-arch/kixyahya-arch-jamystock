@@ -21,6 +21,9 @@ export interface MissionSummary {
   contraintesAcces: Record<string, unknown> | null;
   contactSite: { nom: string; telephone: string } | null;
   creneau: string | null;
+  /** FLX-04 : tournée et rang de l'arrêt */
+  tournee?: string | null;
+  tourneeId?: string | null;
   /** mission « Photo » : bien concerné */
   articleLibelle?: string | null;
   /** WMS-05 : zone d'un inventaire tournant */

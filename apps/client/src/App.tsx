@@ -12,6 +12,7 @@ import { Collection } from './screens/Collection';
 import { Documents } from './screens/Documents';
 import { Invitation } from './screens/Invitation';
 import { Users } from './screens/Users';
+import { Tracking } from './screens/Tracking';
 import { Account } from './screens/Account';
 import { Banner, Shell } from './components/ui';
 
@@ -43,6 +44,8 @@ export function App() {
   if (route.name === 'invitation') return <Invitation token={route.token} onLogged={setSession} />;
   // CLI-02 : lien « voir son espace » ouvert depuis le Back-Office
   if (route.name === 'support') return <SupportStart token={route.token} onLogged={setSession} />;
+  // SUI-02 : suivi du chauffeur, ouvert sans compte depuis l'e-mail ou le SMS
+  if (route.name === 'suivi') return <Tracking token={route.token} />;
   if (!session) return <Login onLogged={setSession} />;
   const onLogout = () =>
     void logout().then(() => {

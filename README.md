@@ -143,6 +143,11 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | POST | `/api/v1/field/articles/:id/duplicate` (1 à 50 copies), `/bo/warehouse/labels/articles` | Opérateur | REC-05 |
 | GET | `/api/v1/bo/warehouse/depots/:id/plan`, `/bo/warehouse/zones/:id/contents?emplacement` | Super Admin | WMS-04 |
 | GET / POST | `/api/v1/bo/inventaires?statut`, `/bo/inventaires/:id`, POST `/bo/inventaires/:id/ecarts/:ecartId`, `/bo/inventaires/:id/annuler` | Super Admin | WMS-05 |
+| GET / POST / PUT | `/api/v1/bo/tournees?date`, `/bo/tournees/:id`, POST `/bo/tournees/:id/annuler` | Dispatcher, Super Admin | FLX-04 |
+| GET | `/api/v1/bo/flux/carte` | Dispatcher, Super Admin | FLX-05 |
+| POST | `/api/v1/field/positions` (120 points au plus, seulement pendant un trajet en cours) | Chauffeur | FLX-05, LIV-02 |
+| GET | `/api/v1/public/suivi/:jeton` (lien signé 48 h, sans compte) | public signé | SUI-02, LIV-02 |
+| GET / POST / PUT / DELETE | `/api/v1/bo/email-templates`, `/bo/email-templates/:modele`, POST `/bo/email-templates/:modele/apercu` | Super Admin | §6.3 |
 
 ### App terrain : file d'actions hors-ligne
 
@@ -266,6 +271,24 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
     (même projet déjà là, même allée, zone dédiée au client, place suffisante), avec la raison et la surface libre.
     Hors réseau, l'opérateur range où il y a de la place.
 
+- **I. Flux et suivi** (fait) :
+  - Tournées (FLX-04) : dans « Planning > Tournées », le dispatcher choisit les arrêts du jour (livraisons et collectes),
+    les donne à un chauffeur et un véhicule, puis les remet dans l'ordre. Chaque tournée affiche son volume, son poids,
+    une estimation des kilomètres, des alertes de capacité et le tracé sur une carte. Un arrêt commencé ne peut plus être
+    retiré ; le chauffeur voit « Tournée TRN-… · arrêt N » sur son terminal.
+  - Carte des chauffeurs (FLX-05) : position et avancement de chaque chauffeur, rafraîchis toutes les 30 s. La position
+    n'est enregistrée que pendant un trajet en cours (RGPD) et effacée au bout de 30 jours ; sans nouvelle depuis 10 min,
+    elle est signalée comme ancienne.
+  - Lien de suivi (SUI-02, LIV-02) : au départ du chauffeur, le client reçoit un e-mail « en route » avec l'heure
+    d'arrivée estimée (position du camion, arrêts avant lui) et un lien valable 48 heures, sans compte, qu'il peut
+    transmettre à la personne sur place. Le même lien est dans la commande. Le SMS est préparé dans la file mais ne part
+    qu'une fois Twilio branché.
+  - Modèles d'e-mails (§6.3) : « E-mails > Modèles » permet de réécrire l'objet, le texte et le bouton de chaque message,
+    avec des repères (`{{numero}}`, `{{eta}}`…) et un aperçu en direct. La mise en page reste celle de JAMYSTOCK ; on
+    revient au texte d'origine d'un clic.
+  - Les adresses sont géolocalisées par la Base Adresse Nationale à la commande (`GEOCODER=ban`, actif par défaut en
+    production) ; sans coordonnées, l'heure d'arrivée n'est pas affichée.
+
 ### Variables d'environnement des services externes
 
 | Variable | Rôle | Sans elle |
@@ -274,6 +297,9 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `PUBLIC_URL` | Adresse de l'Espace Client dans les liens des e-mails | `RENDER_EXTERNAL_URL` sur Render |
 | `STRIPE_SECRET_KEY` | Carte, SEPA, prélèvements, paiement en ligne | Le paiement en ligne est masqué ; le virement reste proposé. |
 | `STRIPE_WEBHOOK_SECRET` | Signature des webhooks Stripe (événements `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`) | Les paiements ne sont pas rapprochés automatiquement. |
+| `GEOCODER` (`ban` ou `off`), `GEOCODER_URL` | Géolocalisation des adresses pour la carte et l'heure d'arrivée | `off` hors production : pas de coordonnées pour les nouvelles adresses. |
+| `MAP_TILES_URL` | Fond de carte (par défaut OpenStreetMap) | Tuiles OpenStreetMap ; pour un usage soutenu, prendre un fournisseur de tuiles. |
+| `TWILIO_*` (à venir) | SMS « chauffeur en route » | Le SMS reste dans la file, seul l'e-mail part. |
 
 Voir [docs/points-ouverts.md](docs/points-ouverts.md) pour les questions à trancher avec le client et les hypothèses prises,
 et [docs/charte-graphique.md](docs/charte-graphique.md) pour la charte visuelle commune aux trois applis.

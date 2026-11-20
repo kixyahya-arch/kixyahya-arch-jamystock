@@ -7,7 +7,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
   const nav: { r: Route; label: string; active: boolean }[] = [
     ...(session.user?.role === 'SUPER_ADMIN' ? [{ r: { name: 'pilotage' } as Route, label: 'Pilotage', active: route.name === 'pilotage' }] : []),
     { r: { name: 'demandes' }, label: 'Demandes', active: route.name === 'demandes' || route.name === 'demande' },
-    { r: { name: 'planning' }, label: 'Planning', active: route.name === 'planning' },
+    { r: { name: 'planning' }, label: 'Planning', active: ['planning', 'tournees', 'carte'].includes(route.name) },
     { r: { name: 'clients' }, label: 'Clients', active: route.name === 'clients' || route.name === 'client' || route.name === 'nouveau-client' },
     ...(session.user?.role === 'SUPER_ADMIN'
       ? [{ r: { name: 'depots' } as Route, label: 'Dépôts', active: ['depots', 'depot', 'plan-depot', 'inventaires', 'inventaire'].includes(route.name) }]
@@ -18,7 +18,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
     ...(session.user?.role === 'SUPER_ADMIN'
       ? [
           { r: { name: 'facturation' } as Route, label: 'Facturation', active: ['facturation', 'facture', 'tarifs', 'surfaces'].includes(route.name) },
-          { r: { name: 'emails' } as Route, label: 'E-mails', active: route.name === 'emails' },
+          { r: { name: 'emails' } as Route, label: 'E-mails', active: ['emails', 'modeles-email', 'modele-email'].includes(route.name) },
         ]
       : []),
   ];
@@ -102,4 +102,34 @@ export function Tile({ n, label, href: link, accent, alert, onClick }: { n: numb
   if (link) return <a className={cls} href={link}>{body}</a>;
   if (onClick) return <button type="button" className={cls} onClick={onClick}>{body}</button>;
   return <div className={cls}>{body}</div>;
+}
+
+/** Onglets du planning : par ressource, par tournée, carte des chauffeurs. */
+export function PlanningTabs({ active, date }: { active: 'planning' | 'tournees' | 'carte'; date?: string }) {
+  return (
+    <nav className="subnav" aria-label="Planning">
+      <a href={href({ name: 'planning', date })} aria-current={active === 'planning' ? 'page' : undefined}>
+        Par ressource
+      </a>
+      <a href={href({ name: 'tournees', date })} aria-current={active === 'tournees' ? 'page' : undefined}>
+        Tournées
+      </a>
+      <a href={href({ name: 'carte' })} aria-current={active === 'carte' ? 'page' : undefined}>
+        Carte des chauffeurs
+      </a>
+    </nav>
+  );
+}
+
+export function EmailTabs({ active }: { active: 'emails' | 'modeles' }) {
+  return (
+    <nav className="subnav" aria-label="E-mails">
+      <a href={href({ name: 'emails' })} aria-current={active === 'emails' ? 'page' : undefined}>
+        Envois
+      </a>
+      <a href={href({ name: 'modeles-email' })} aria-current={active === 'modeles' ? 'page' : undefined}>
+        Modèles
+      </a>
+    </nav>
+  );
 }

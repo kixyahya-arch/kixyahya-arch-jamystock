@@ -12,12 +12,14 @@ export type Route =
   | { name: 'compte' }
   | { name: 'utilisateurs' }
   | { name: 'invitation'; token: string }
-  | { name: 'support'; token: string };
+  | { name: 'support'; token: string }
+  | { name: 'suivi'; token: string };
 
 export function parse(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('?')[0]!.split('/');
   if (a === 'invitation' && b) return { name: 'invitation', token: b };
   if (a === 'support' && b) return { name: 'support', token: b };
+  if (a === 'suivi' && b) return { name: 'suivi', token: b };
   if (a === 'compte') return { name: 'compte' };
   if (a === 'utilisateurs') return { name: 'utilisateurs' };
   if (a === 'article' && b) return { name: 'article', id: b };
@@ -41,6 +43,8 @@ export function href(r: Route): string {
       return `#/invitation/${r.token}`;
     case 'support':
       return `#/support/${r.token}`;
+    case 'suivi':
+      return `#/suivi/${r.token}`;
     default:
       return `#/${r.name}`;
   }

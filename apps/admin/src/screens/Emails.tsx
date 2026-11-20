@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { get, post } from '../lib/api';
 import { dateFr } from '../lib/labels';
-import { Banner, Pills, StatusPill, Tile } from '../components/ui';
+import { Banner, EmailTabs, Pills, StatusPill, Tile } from '../components/ui';
 
 /** §6.3 : suivi des e-mails envoyés aux clients (invitations, commandes, livraisons, factures, paiements). */
 
@@ -94,6 +94,7 @@ export function Emails() {
           <p className="lead">Invitations, suivi des commandes, livraisons, factures et paiements : chaque message envoyé aux clients, avec son aperçu.</p>
         </div>
       </section>
+      <EmailTabs active="emails" />
 
       {data?.fournisseur === 'JOURNAL' && (
         <Banner kind="info">

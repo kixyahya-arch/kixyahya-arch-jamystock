@@ -73,6 +73,7 @@ export class ToursController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
   @Get()
@@ -102,6 +103,7 @@ export class ToursController {
       return {
         date: day,
         depot,
+        tuiles: this.config.mapTilesUrl,
         tournees: tours.map((t) => {
           const arrets = stops.filter((s) => s.tourneeId === t.id);
           const vol = arrets.reduce((s, a) => s + (a.type === 'LIVRAISON' ? (a.volumeM3 ?? 0) : 0), 0);

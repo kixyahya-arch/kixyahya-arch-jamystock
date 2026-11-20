@@ -3,7 +3,7 @@ import { get, post } from '../lib/api';
 import { go, href } from '../lib/router';
 import type { Mission, Planning, Resource, Vehicle } from '../lib/types';
 import { MISSION_STATUS, MISSION_TYPE, ROLE, addDays, dateFr, roleFor, timeFr } from '../lib/labels';
-import { Banner, StatusPill } from '../components/ui';
+import { Banner, PlanningTabs, StatusPill } from '../components/ui';
 import { AssignForm } from '../components/Assign';
 
 /**
@@ -80,6 +80,7 @@ export function PlanningView({ date }: { date: string }) {
           </button>
         </div>
       </section>
+      <PlanningTabs active="planning" date={date} />
 
       {notice && <Banner kind="ok">{notice}</Banner>}
       {error && <Banner kind="error">{error}</Banner>}

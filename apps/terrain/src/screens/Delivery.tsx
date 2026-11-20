@@ -1,3 +1,4 @@
+import { startTracking, stopTracking } from '../lib/tracking';
 import { useEffect, useState } from 'react';
 import { uuidv7, type ReserveInput } from '@jamystock/domain/browser';
 import { Scanner } from '../components/Scanner';
@@ -112,7 +113,15 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
               Naviguer
             </a>
             {!st.departed ? (
-              <button type="button" className="btn primary" onClick={async () => (await enqueue({ type: 'DEPART', payload: { missionId } }), save({ ...st, departed: true }))}>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={async () => {
+                  await enqueue({ type: 'DEPART', payload: { missionId } });
+                  startTracking(missionId);
+                  await save({ ...st, departed: true });
+                }}
+              >
                 En route
               </button>
             ) : !st.arrived ? (
@@ -122,6 +131,7 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
                 onClick={async () => {
                   const gps = await currentPosition();
                   await enqueue({ type: 'ARRIVE', payload: { missionId, gps } });
+                  stopTracking(missionId);
                   if (!gps) setInfo('Position GPS indisponible : arrivée enregistrée sans coordonnées.');
                   await save({ ...st, arrived: true, phase: 'unload' });
                 }}
@@ -254,6 +264,7 @@ function SignBl({ mission, st, onBack, onSigned }: { mission: MissionDetail; st:
           const empreinte = await blFingerprint(base);
           const gps = await currentPosition(4000);
           await enqueue({ type: 'BL_SIGN', payload: { ...base, gps, empreinte } });
+          stopTracking(base.missionId);
           onSigned(base.blId);
         }}
       >
@@ -299,6 +310,7 @@ function DropOff({ mission, livres, onBack, onDone }: { mission: MissionDetail; 
           const empreinte = await blFingerprint(base);
           const gps = await currentPosition(4000);
           await enqueue({ type: 'BL_SIGN', payload: { ...base, gps, empreinte } });
+          stopTracking(base.missionId);
           onDone(base.blId);
         }}
       >
@@ -390,7 +402,15 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
             Naviguer
           </a>
           {!departed && (
-            <button type="button" className="btn primary" onClick={async () => (await enqueue({ type: 'DEPART', payload: { missionId } }), setDeparted(true))}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={async () => {
+                await enqueue({ type: 'DEPART', payload: { missionId } });
+                startTracking(missionId);
+                setDeparted(true);
+              }}
+            >
               En route
             </button>
           )}
@@ -444,6 +464,7 @@ export function Pickup({ missionId, onBack }: { missionId: string; onBack: () =>
               };
               const empreinte = await pickupFingerprint(base);
               await enqueue({ type: 'PICKUP_SIGN', payload: { ...base, gps: await currentPosition(4000), empreinte } });
+              stopTracking(missionId);
               setDone(true);
             }}
           >

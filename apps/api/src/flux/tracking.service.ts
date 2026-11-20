@@ -108,7 +108,7 @@ export class TrackingService {
       const p = (
         await tx.query<{ lat: number; lng: number; horodatage: Date }>(
           `SELECT lat, lng, horodatage FROM position_chauffeur WHERE utilisateur_id = $1 AND horodatage >= $2 ORDER BY horodatage DESC LIMIT 1`,
-          [m.assigne_a, m.debut_reel ?? new Date(now.getTime() - 12 * 3600_000)],
+          [m.assigne_a, m.debut_reel ? new Date(m.debut_reel.getTime() - 60_000) : new Date(now.getTime() - 12 * 3600_000)],
         )
       ).rows[0];
       if (p) position = { lat: p.lat, lng: p.lng, at: p.horodatage.toISOString(), fraiche: now.getTime() - p.horodatage.getTime() <= POSITION_FRAICHE_MS };
