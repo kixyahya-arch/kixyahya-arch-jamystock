@@ -177,6 +177,7 @@ button {
   display: flex;
   gap: 18px;
   flex: 1;
+  min-width: 0;
   justify-content: center;
 }
 .main-nav a {
@@ -194,6 +195,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .who {
   text-decoration: none;
@@ -204,7 +206,13 @@ button {
   font-size: 0.88rem;
   color: #c7d6e2;
 }
-@media (max-width: 900px) {
+/* écrans portables : le nom de l'utilisateur laisse la place aux liens (il reste dans « Mon compte » en pied de page) */
+@media (max-width: 1440px) {
+  .who {
+    display: none;
+  }
+}
+@media (max-width: 1180px) {
   .header-row {
     flex-wrap: wrap;
     gap: 10px 16px;
