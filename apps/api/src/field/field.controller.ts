@@ -38,6 +38,10 @@ const Action = z.discriminatedUnion('type', [
   z.object({ type: z.literal('RETURN'), payload: z.object({ articleQr: qr, locationQr: qr.optional(), motif: z.string().max(1000).optional() }) }),
   z.object({ type: z.literal('PICK'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('PICK_MISSING'), payload: z.object({ missionId: uuid, articleId: uuid, photoId: uuid.optional(), commentaire: z.string().max(1000).optional() }) }),
+  z.object({
+    type: z.literal('PHOTO_REQUEST_DONE'),
+    payload: z.object({ missionId: uuid, articleQr: qr, photoIds: z.array(uuid).min(1).max(6), etat: z.enum(ARTICLE_CONDITIONS).optional(), commentaire: z.string().max(1000).optional() }),
+  }),
   z.object({ type: z.literal('PICK_COMPLETE'), payload: z.object({ missionId: uuid }) }),
   z.object({ type: z.literal('LOAD'), payload: z.object({ missionId: uuid, articleQr: qr }) }),
   z.object({ type: z.literal('DEPART'), payload: z.object({ missionId: uuid }) }),

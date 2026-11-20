@@ -1433,3 +1433,135 @@ label.inline {
   color: #fff;
   border-color: #000;
 }
+
+/* ——— Lot 2 : annotations, demandes, exports, estimation ——— */
+.ref-line {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.notes-box,
+.requests-box {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.notes-box.form-card {
+  padding: 20px;
+  border-top: 1.5px solid var(--ink);
+}
+.notes-box textarea,
+.requests-box textarea {
+  width: 100%;
+}
+.notes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.notes-head h2,
+.notes-box h2,
+.requests-box h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.note-text {
+  white-space: pre-wrap;
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+}
+.request-form {
+  margin-top: 12px;
+}
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 8px;
+}
+.request-list,
+.export-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.request-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.request-list small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+.filters[open] .export-panel {
+  grid-template-columns: 1fr;
+  width: min(420px, calc(100vw - 32px));
+}
+.export-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+.bill-estimate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 24px;
+  padding: 20px 24px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+}
+.bill-estimate-main {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+.bill-estimate-amount {
+  margin: 6px 0 4px;
+  font-size: 1rem;
+}
+.bill-estimate-amount strong {
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+  font-weight: 400;
+}
+.bill-estimate-detail {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.bill-estimate-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 0.92rem;
+}
+.bill-estimate-table caption {
+  text-align: left;
+  padding: 6px 0;
+  color: var(--muted);
+}
+.bill-estimate-table td {
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.bill-estimate-table .num {
+  text-align: right;
+  white-space: nowrap;
+  padding-left: 12px;
+}
+.bill-estimate-table tfoot td {
+  font-weight: 600;
+}

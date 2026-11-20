@@ -117,6 +117,11 @@ des sessions, et le parcours panier → soumission → contre-proposition → pl
 | GET | `/api/v1/articles/:id` | tous | INV-02 |
 | GET / POST / DELETE | `/api/v1/cart`, `/cart/items`, `/cart/items/:articleId` (avec estimation : date au plus tôt, coût, livraisons incluses) | clients | CMD-01, CMD-04 |
 | GET | `/api/v1/me/context`, `/me/surface` | clients | INV-03, INV-04, ADM-01 |
+| GET | `/api/v1/me/inventory/export.csv?…filtres`, `/me/inventory/categories` | clients | INV-05, INV-06 |
+| POST / GET | `/api/v1/me/inventory/exports`, GET `/me/inventory/exports/:id/file` | clients | INV-05 |
+| PUT | `/api/v1/articles/:id/annotation` | clients | INV-06 |
+| POST / GET | `/api/v1/articles/:id/requests` | clients | INV-07 |
+| GET | `/api/v1/me/billing/estimate` | B2B Admin, particulier | ADM-02 |
 | GET | `/api/v1/files/photos/:id/:taille?t&e&s` (lien signé 15 min, sans jeton) | public signé | §7.3 |
 | POST | `/api/v1/orders/:id/submit` | clients | CMD-02 à 05 |
 | POST | `/api/v1/collections` | clients | CMD-06 |
@@ -152,6 +157,7 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `BL_SIGN` (empreinte SHA-256 vérifiée, réserves, refus, retrait au comptoir) | Chauffeur, Opérateur | LIV-03, LIV-04 |
 | `PICKUP_SIGN` (BL d'enlèvement, articles ATTENDU) | Chauffeur | LIV-06 |
 | `RETURN` (article refusé de retour au dépôt) | Opérateur | §4.3 |
+| `PHOTO_REQUEST_DONE` (bien scanné, 1 à 6 photos, état constaté, réponse au client) | Opérateur | INV-07 |
 
 ### App terrain (PWA)
 
@@ -207,6 +213,20 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
     dans un nouvel onglet, en lecture seule, 30 minutes, avec un motif tracé dans l'audit et un bandeau visible.
   - Pilotage (CLI-03) : remplissage des dépôts, CA récurrent, surface occupée sur 60 jours, missions du jour et
     retards, rechargé toutes les 15 minutes et exportable en CSV.
+- **F. Inventaire côté client** (fait) :
+  - Export (INV-05) : la vue courante (projet, filtres, recherche) en tableur CSV immédiat, ou en PDF illustré d'une ligne
+    par bien avec vignette, préparé en tâche de fond. Le client est prévenu dans l'appli et par e-mail ; le fichier reste
+    téléchargeable 7 jours. Plafond de 3 000 biens par export.
+  - Annotations (INV-06) : le client donne à chaque bien son propre nom, une référence interne, sa catégorie et une note.
+    Le libellé du dépôt ne change pas ; la recherche, les filtres et les exports en tiennent compte. Chaque modification
+    est tracée dans l'audit.
+  - Photo ou constat à la demande (INV-07) : depuis la fiche d'un bien au dépôt, le client demande une photo
+    supplémentaire ou un constat d'état. Une mission « Photo » apparaît au planning pour le jour ouvré suivant ;
+    l'opérateur scanne le bien, le photographie, note son état et répond. Le client est prévenu et la prestation
+    `PHOTO_DEMANDE` est pointée selon sa grille (0 € si elle n'y figure pas).
+  - Estimation de la prochaine facture (ADM-02) : dans « Mes documents », le titulaire du compte voit le montant estimé
+    du mois en cours, à partir des relevés de surface déjà faits, de la surface actuelle pour les jours restants et des
+    prestations déjà réalisées.
 
 ### Variables d'environnement des services externes
 

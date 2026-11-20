@@ -1618,6 +1618,17 @@ label.inline input[type='checkbox'] {
 .mcard.t-collecte {
   border-top-color: var(--lime);
 }
+.mcard.t-photo {
+  border-top-color: var(--maroon);
+}
+.mcard .photo-req {
+  display: grid;
+  gap: 2px;
+}
+.mcard .photo-req small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .mcard.late {
   box-shadow: inset 4px 0 0 var(--maroon);
 }

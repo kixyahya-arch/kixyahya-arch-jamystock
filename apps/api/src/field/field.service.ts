@@ -110,6 +110,7 @@ const ACTION_PERMISSION: Record<FieldAction['type'], Permission> = {
   ARRIVE: 'delivery.execute',
   BL_SIGN: 'delivery.execute',
   PICKUP_SIGN: 'delivery.execute',
+  PHOTO_REQUEST_DONE: 'stock.move',
 };
 
 /** Distance au-delà de laquelle « Arrivé » déclenche une alerte de cohérence (§4.3). */
@@ -207,6 +208,8 @@ export class FieldService {
         return this.receptionClose(tx, ctx, action.payload.commandeId);
       case 'RETURN':
         return this.returnToDepot(tx, ctx, action.payload);
+      case 'PHOTO_REQUEST_DONE':
+        return this.photoRequestDone(tx, ctx, action.payload);
       case 'PICK':
         return this.pick(tx, ctx, action.payload);
       case 'PICK_MISSING':
@@ -439,6 +442,7 @@ export class FieldService {
           creneau: order.creneau_confirme,
         },
         lignes: sortByPath(lignes).map((l) => ({ ...l, vignette: l.vignette ? this.files.photoUrl(user.tenantId, l.vignette, 't') : null })),
+        demande: mission.type === 'PHOTO' ? await this.photoRequestInfo(tx, user, mission) : null,
       };
     });
   }
@@ -860,6 +864,68 @@ export class FieldService {
         [id, ctx.user.tenantId, ref.articleId, ref.blId ?? null, `${ctx.user.tenantId}/photos/${id}`, ref.contexte, ctx.at, ctx.user.id],
       );
     }
+  }
+
+  /** INV-07 : bien à photographier, avec la demande du client. */
+  private async photoRequestInfo(tx: Tx, user: AuthUser, mission: MissionRow) {
+    const d = mission.donnees as { articleId?: string; demande?: string; message?: string };
+    const a = (
+      await tx.query<{ id: string; qr_code: string; libelle: string; nom_client: string | null; etat: string; chemin: string | null; client: string; photo: string | null }>(
+        `SELECT a.id, a.qr_code, a.libelle, a.nom_client, a.etat, e.chemin, ent.nom AS client,
+                (SELECT p.id FROM photo p WHERE p.article_id = a.id AND p.televersee ORDER BY p.prise_le LIMIT 1) AS photo
+           FROM article a JOIN entreprise ent ON ent.id = a.entreprise_id LEFT JOIN emplacement e ON e.id = a.emplacement_courant_id WHERE a.id = $1`,
+        [d.articleId],
+      )
+    ).rows[0];
+    if (!a) return null;
+    return {
+      type: d.demande ?? 'PHOTO',
+      message: d.message ?? null,
+      article: { id: a.id, qrCode: a.qr_code, libelle: a.libelle, nomClient: a.nom_client, etat: a.etat, chemin: a.chemin, client: a.client, vignette: a.photo ? this.files.photoUrl(user.tenantId, a.photo, 't') : null },
+    };
+  }
+
+  /**
+   * INV-07 : l'opérateur scanne le bien demandé, le photographie et note son état. La mission se termine, la prestation
+   * « Photo à la demande » est pointée selon la grille du client (0 € si elle n'y figure pas) et le client est prévenu.
+   */
+  private async photoRequestDone(tx: Tx, ctx: ActionCtx, p: { missionId: string; articleQr: string; photoIds: string[]; etat?: string; commentaire?: string }) {
+    const mission = await this.mission(tx, ctx.user, p.missionId, true, ['PHOTO']);
+    const article = await this.articleByQr(tx, p.articleQr);
+    const d = mission.donnees as { articleId?: string; entrepriseId?: string; demande?: string; demandeurId?: string };
+    if (d.articleId !== article.id) throw conflict('MAUVAIS_ARTICLE', `« ${article.libelle} » n’est pas le bien demandé`);
+    if (p.photoIds.length < 1 || p.photoIds.length > MAX_PHOTOS_PER_ARTICLE) throw unprocessable('PHOTOS', `Entre 1 et ${MAX_PHOTOS_PER_ARTICLE} photos`);
+    await this.registerPhotos(tx, ctx, p.photoIds, { articleId: article.id, contexte: d.demande === 'CONSTAT' ? 'CONSTAT' : 'A_LA_DEMANDE' });
+    const etatAvant = (await tx.query<{ etat: string }>('SELECT etat FROM article WHERE id = $1', [article.id])).rows[0]!.etat;
+    if (p.etat && p.etat !== etatAvant) {
+      await tx.query('UPDATE article SET etat = $2, updated_at = now() WHERE id = $1', [article.id, p.etat]);
+      await this.audit.record(tx, ctx.user, { action: 'ETAT_CONSTATE', objet: 'article', objetId: article.id, entrepriseId: d.entrepriseId ?? null, avant: { etat: etatAvant }, apres: { etat: p.etat }, motif: p.commentaire ?? null });
+    }
+    await this.startMission(tx, ctx, mission, { commentaire: p.commentaire ?? null, photoIds: p.photoIds, etatConstate: p.etat ?? etatAvant });
+    await this.finishMission(tx, ctx, mission);
+    if (d.entrepriseId) {
+      await tx.query(
+        `INSERT INTO prestation_a_facturer (id, tenant_id, entreprise_id, code, libelle, quantite, unite, prix_unitaire_ht_cents, taux_tva, source_id, date_prestation)
+         SELECT $1, $2, $3, 'PHOTO_DEMANDE', coalesce(l->>'libelle', 'Photo à la demande'), 1, 'forfait',
+                coalesce((l->>'prix_ht_cents')::int, 0), coalesce((l->>'tva')::numeric, 20), $4, $5::date
+           FROM (SELECT 1) one
+           LEFT JOIN LATERAL (
+             SELECT l FROM forfait f JOIN grille_tarifaire g ON g.id = f.grille_tarifaire_id, jsonb_array_elements(g.lignes) l
+              WHERE f.entreprise_id = $3 AND f.statut = 'ACTIF' AND l->>'code' = 'PHOTO_DEMANDE' LIMIT 1
+           ) t ON true`,
+        [uuidv7(), ctx.user.tenantId, d.entrepriseId, mission.id, ctx.at.toISOString().slice(0, 10)],
+      );
+    }
+    if (d.demandeurId) {
+      const vars = { articleId: article.id, libelle: article.libelle, demande: d.demande ?? 'PHOTO', commentaire: p.commentaire ?? null };
+      await tx.query(`INSERT INTO notification (id, tenant_id, destinataire_id, canal, modele, variables) VALUES ($1,$2,$3,'IN_APP','PHOTO_PRETE',$4)`, [
+        uuidv7(), ctx.user.tenantId, d.demandeurId, JSON.stringify(vars),
+      ]);
+      await tx.query(`INSERT INTO notification (id, tenant_id, destinataire_id, canal, modele, variables) VALUES ($1,$2,$3,'EMAIL','PHOTO_PRETE',$4)`, [
+        uuidv7(), ctx.user.tenantId, d.demandeurId, JSON.stringify(vars),
+      ]);
+    }
+    return { articleId: article.id, missionId: mission.id, photos: p.photoIds.length };
   }
 
   private async peekMissionType(tx: Tx, missionId: string): Promise<string | null> {

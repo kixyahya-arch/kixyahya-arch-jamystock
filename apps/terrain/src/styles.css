@@ -767,3 +767,21 @@ body:has(.login) {
 .login .banner {
   color: var(--ink);
 }
+
+/* INV-07 : demande de photo ou de constat */
+.request-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1.5px solid currentColor;
+}
+.request-card small {
+  opacity: 0.75;
+}
+.request-msg {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}

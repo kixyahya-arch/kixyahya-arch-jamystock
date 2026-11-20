@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiBlob, get, post, saveBlob } from '../lib/api';
 import { hashParam } from '../lib/router';
-import { dateFr, euros, type Ctx } from '../lib/types';
+import { dateFr, euros, type BillingEstimate, type Ctx } from '../lib/types';
 import { Banner, Pills, StatusPill } from '../components/ui';
 
 /** SUI-03 : BL signés, factures et avoirs, filtrables par type, projet et période ; PDF figés, téléchargement groupé. */
@@ -47,12 +47,16 @@ export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
   // ADM-04 : le titulaire du compte peut régler une facture en ligne (Stripe)
   const [canPay, setCanPay] = useState(false);
   const paidBack = hashParam('paiement') === 'ok';
+  const [estimate, setEstimate] = useState<BillingEstimate | null>(null);
 
   useEffect(() => {
     if (role !== 'B2B_ADMIN' && role !== 'B2C') return;
     get<{ paiementEnLigne: boolean }>('/me/billing')
       .then((b) => setCanPay(b.paiementEnLigne))
       .catch(() => setCanPay(false));
+    get<BillingEstimate>('/me/billing/estimate')
+      .then(setEstimate)
+      .catch(() => setEstimate(null));
   }, [role]);
 
   const pay = async (d: Doc) => {
@@ -131,6 +135,8 @@ export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
           {unpaid.length === 1 ? 'Une facture est' : `${unpaid.length} factures sont`} à régler pour un total de {euros(unpaid.reduce((s, d) => s + (d.totalTtcCents ?? 0), 0))} TTC.
         </Banner>
       )}
+
+      {estimate && estimate.factures.length > 0 && <EstimateCard e={estimate} />}
 
       <section className="doc-filters" aria-label="Filtres">
         <Pills<Filter>
@@ -236,5 +242,60 @@ export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
         </>
       )}
     </>
+  );
+}
+
+/** ADM-02 : estimation de la prochaine facture, recalculée à chaque visite. */
+function EstimateCard({ e }: { e: BillingEstimate }) {
+  const [open, setOpen] = useState(false);
+  const month = monthOf(`${e.mois}-01`);
+  const projected = e.factures.reduce((s, f) => s + f.joursProjetes, 0) > 0;
+  return (
+    <section className="bill-estimate">
+      <div className="bill-estimate-main">
+        <span className="eyebrow">— Prochaine facture</span>
+        <p className="bill-estimate-amount">
+          <strong>{euros(e.totalTtcCents)}</strong> <span>TTC estimés</span>
+        </p>
+        <p className="hint small">
+          <span className="cap">{month}</span>, émission prévue le {dateFr(e.emissionPrevue)}.{' '}
+          {projected ? `Projection avec votre surface actuelle (${e.surfaceActuelle.toLocaleString('fr-FR')} m²) jusqu’à la fin du mois.` : 'Mois complet relevé.'}
+        </p>
+      </div>
+      <button type="button" className="btn small" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Masquer le détail' : 'Voir le détail'}
+      </button>
+      {open && (
+        <div className="bill-estimate-detail">
+          {e.factures.map((f) => (
+            <table key={f.periodeDebut} className="bill-estimate-table">
+              <caption>
+                Du {dateFr(f.periodeDebut)} au {dateFr(f.periodeFin)} · {f.joursReleves} jour{f.joursReleves > 1 ? 's' : ''} relevé{f.joursReleves > 1 ? 's' : ''}
+                {f.joursProjetes ? `, ${f.joursProjetes} projeté${f.joursProjetes > 1 ? 's' : ''}` : ''}
+              </caption>
+              <tbody>
+                {f.lignes.map((l, i) => (
+                  <tr key={i}>
+                    <td>{l.libelle}</td>
+                    <td className="num">{euros(l.totalHtCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total HT</td>
+                  <td className="num">{euros(f.totalHtCents)}</td>
+                </tr>
+                <tr>
+                  <td>TVA</td>
+                  <td className="num">{euros(f.tvaCents)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          ))}
+          <p className="hint small">Estimation indicative : la facture définitive reprend les relevés quotidiens réels et les prestations réalisées d’ici la fin du mois.</p>
+        </div>
+      )}
+    </section>
   );
 }

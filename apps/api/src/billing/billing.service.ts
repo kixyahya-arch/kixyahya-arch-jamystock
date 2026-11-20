@@ -199,6 +199,84 @@ export class BillingService {
   // ===========================================================================================================
 
   /**
+   * ADM-02 : estimation de la prochaine facture, sans rien écrire. Mêmes règles que le brouillon du 1er : forfait au prorata,
+   * dépassement sur la surface moyenne (ou le pic), prestations du mois. Les jours passés viennent des relevés de 23 h 59 ;
+   * les jours restants sont projetés à la surface actuelle (« si votre stock ne change pas »).
+   */
+  async estimate(tx: Tx, entrepriseId: string, at: Date) {
+    const today = parisClock(at).date;
+    const month = today.slice(0, 7);
+    const forfaits = await tx.query<ForfaitRow>(
+      `SELECT f.id, f.entreprise_id, f.grille_tarifaire_id, f.m2_inclus, f.prix_mensuel_cents, f.prix_m2_depassement_cents,
+              f.prestations_incluses, f.mode_surface, f.date_debut::text, f.date_fin::text
+         FROM forfait f WHERE f.statut IN ('ACTIF','TERMINE') AND f.entreprise_id = $1 ORDER BY f.date_debut`,
+      [entrepriseId],
+    );
+    const live = (await liveSurface(tx, entrepriseId, true)).m2Occupes;
+    const out: ({ totalHtCents: number; tvaCents: number; totalTtcCents: number } & Record<string, unknown>)[] = [];
+    for (const f of forfaits.rows) {
+      const period = contractPeriodInMonth(month, f.date_debut, f.date_fin);
+      if (!period || period.from > today) continue;
+      const known = await tx.query<{ date: string; m2_occupes: number }>(
+        `SELECT date::text, m2_occupes FROM instantane_occupation WHERE entreprise_id = $1 AND projet_id IS NULL AND depot_id IS NULL AND date BETWEEN $2 AND $3 ORDER BY date`,
+        [entrepriseId, period.from, period.to < today ? period.to : addIsoDays(today, -1)],
+      );
+      const projected = Math.max(0, period.days - known.rows.length);
+      const daily = [...known.rows.map((r) => Number(r.m2_occupes)), ...Array.from({ length: projected }, () => live)];
+      const services = await tx.query<{ code: string; libelle: string; quantite: number; unite: string; prix_unitaire_ht_cents: number; taux_tva: number; date_prestation: string }>(
+        `SELECT code, libelle, quantite, unite, prix_unitaire_ht_cents, taux_tva, date_prestation::text FROM prestation_a_facturer
+          WHERE entreprise_id = $1 AND facture_id IS NULL AND date_prestation <= $2 ORDER BY date_prestation, created_at`,
+        [entrepriseId, period.to],
+      );
+      const draft = computeMonthlyInvoice({
+        terms: {
+          includedM2: f.m2_inclus,
+          monthlyPriceCents: f.prix_mensuel_cents,
+          overagePricePerM2Cents: f.prix_m2_depassement_cents,
+          includedServices: f.prestations_incluses ?? {},
+          vatRate: 20,
+          surfaceMode: f.mode_surface,
+        },
+        dailyM2: daily,
+        coveredDays: period.days,
+        daysInMonth: monthBounds(month).days,
+        services: services.rows.map((s) => ({
+          code: s.code,
+          label: `${s.libelle} du ${new Date(`${s.date_prestation}T12:00:00Z`).toLocaleDateString('fr-FR')}`,
+          quantity: Number(s.quantite),
+          unit: s.unite,
+          unitPriceCents: s.prix_unitaire_ht_cents,
+          vatRate: Number(s.taux_tva),
+        })),
+      });
+      out.push({
+        periodeDebut: period.from,
+        periodeFin: period.to,
+        m2Inclus: Number(f.m2_inclus),
+        modeSurface: f.mode_surface,
+        m2Factures: draft.billedM2,
+        joursReleves: known.rows.length,
+        joursProjetes: projected,
+        lignes: draft.lines.map((l) => ({ type: l.type, libelle: l.label, quantite: l.quantity, unite: l.unit, prixUnitaireHtCents: l.unitPriceCents, totalHtCents: l.totalHtCents })),
+        totalHtCents: draft.totalHtCents,
+        tvaCents: draft.totalVatCents,
+        totalTtcCents: draft.totalTtcCents,
+      });
+    }
+    const sum = (k: 'totalHtCents' | 'tvaCents' | 'totalTtcCents') => out.reduce((s, x) => s + x[k], 0);
+    return {
+      mois: month,
+      calculeLe: at.toISOString(),
+      emissionPrevue: addIsoDays(monthBounds(month).end, 1 + AUTO_ISSUE_DELAY_DAYS),
+      surfaceActuelle: live,
+      factures: out,
+      totalHtCents: sum('totalHtCents'),
+      tvaCents: sum('tvaCents'),
+      totalTtcCents: sum('totalTtcCents'),
+    };
+  }
+
+  /**
    * Brouillons du mois pour chaque contrat qui le couvre (un avenant en cours de mois donne deux factures au prorata).
    * Un brouillon existant est recalculé ; une facture déjà émise n'est jamais touchée.
    */

@@ -41,6 +41,8 @@ const MODELE: Record<string, string> = {
   PAIEMENT_ECHOUE: 'Paiement refusé',
   PAIEMENT_RECU: 'Paiement reçu',
   RELANCE_IMPAYE: 'Relance impayé',
+  EXPORT_PRET: 'Export d’inventaire prêt',
+  PHOTO_PRETE: 'Photo ou constat prêt',
 };
 const STATUT: Record<Exclude<Statut, ''>, string> = { EN_ATTENTE: 'En file', ENVOYEE: 'Envoyé', ECHEC: 'Échec', IGNOREE: 'Non envoyé' };
 const timeFr = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
