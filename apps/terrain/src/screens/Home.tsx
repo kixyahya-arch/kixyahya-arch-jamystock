@@ -12,6 +12,7 @@ const TYPE_LABEL: Record<string, string> = {
   RETRAIT: 'Retrait au comptoir',
   INVENTAIRE: 'Inventaire',
   PHOTO: 'Photo à la demande',
+  DEGROUPAGE: 'Dégroupage de palette',
 };
 
 export function Home({ session, go, onLogout }: { session: Session; go: (r: Route) => void; onLogout: () => void }) {

@@ -34,6 +34,7 @@ import { PaymentsService } from './payments/payments.service.js';
 import { DunningService } from './billing/dunning.service.js';
 import { SupportController } from './support/support.controller.js';
 import { ArticleClientController, ClientInventoryController, InventoryExportService } from './inventory/client-inventory.controller.js';
+import { BoDisputesController, CartTemplatesController, DisputesController } from './orders/after-sales.controller.js';
 import { PilotageController } from './pilotage/pilotage.controller.js';
 
 /** Monolithe modulaire (§7.1) : un module Nest par domaine métier au fil des phases. */
@@ -42,7 +43,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },

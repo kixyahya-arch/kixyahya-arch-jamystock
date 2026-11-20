@@ -43,6 +43,8 @@ const MODELE: Record<string, string> = {
   RELANCE_IMPAYE: 'Relance impayé',
   EXPORT_PRET: 'Export d’inventaire prêt',
   PHOTO_PRETE: 'Photo ou constat prêt',
+  LITIGE_RECU: 'Signalement reçu',
+  LITIGE_TRAITE: 'Réponse à un signalement',
 };
 const STATUT: Record<Exclude<Statut, ''>, string> = { EN_ATTENTE: 'En file', ENVOYEE: 'Envoyé', ECHEC: 'Échec', IGNOREE: 'Non envoyé' };
 const timeFr = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });

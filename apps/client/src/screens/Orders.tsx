@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { get, post } from '../lib/api';
+import { api, get, getSession, post } from '../lib/api';
 import { href } from '../lib/router';
-import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, type Ctx, type Order, type OrderSummary } from '../lib/types';
+import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
 import { Banner, Pills, StatusPill } from '../components/ui';
 
 const DONE = ['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE', 'STOCKEE', 'CLOTUREE', 'ANNULEE', 'REFUSEE'];
@@ -185,6 +185,12 @@ export function OrderView({ id, role }: { id: string; role: string }) {
                 </dd>
               </>
             )}
+            {o.type === 'LIVRAISON' && (
+              <>
+                <dt>Si personne n’est là</dt>
+                <dd>{o.depotSansSignature ? 'Dépôt sans signature autorisé' : 'Retour au dépôt'}</dd>
+              </>
+            )}
             {o.type !== 'COLLECTE' && (
               <>
                 <dt>Volume</dt>
@@ -192,6 +198,7 @@ export function OrderView({ id, role }: { id: string; role: string }) {
               </>
             )}
           </dl>
+          {['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE'].includes(o.statut) && <AfterDelivery orderId={o.id} />}
           {canCancel &&
             (confirmCancel ? (
               <div className="callout alert">
@@ -213,5 +220,173 @@ export function OrderView({ id, role }: { id: string; role: string }) {
         </section>
       </div>
     </>
+  );
+}
+
+const MOTIF: Record<Dispute['motif'], string> = { CASSE: 'Bien cassé', RAYURE: 'Rayure ou salissure', MANQUANT: 'Bien manquant', ERREUR: 'Erreur de bien', AUTRE: 'Autre problème' };
+const DISPUTE_STATUS: Record<Dispute['statut'], string> = { OUVERT: 'Reçu', EN_COURS: 'Pris en charge', RESOLU: 'Résolu', REJETE: 'Non retenu' };
+
+/** LIV-05 et SUI-04 : remise (BL, dépôt sans signature et ses photos) et signalement d'un problème dans les 48 h. */
+function AfterDelivery({ orderId }: { orderId: string }) {
+  const [d, setD] = useState<Delivery | null>(null);
+  const [open, setOpen] = useState(false);
+  const load = () => get<Delivery>(`/me/disputes/delivery/${orderId}`).then(setD, () => setD(null));
+  useEffect(() => void load(), [orderId]);
+  if (!d?.livraison) return null;
+  const l = d.livraison;
+  const pending = d.litiges.find((x) => x.statut === 'OUVERT' || x.statut === 'EN_COURS');
+  const readOnly = !!getSession()?.support;
+
+  return (
+    <section className="after-delivery">
+      <h2>Remise</h2>
+      {l.nonSigne ? (
+        <div className="callout">
+          <p>
+            <strong>Déposé sans signature</strong> le {l.le ? new Date(l.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Paris' }) : ''}, comme vous l’aviez autorisé.
+          </p>
+          {l.lieuDepot && <p className="hint">Lieu du dépôt : {l.lieuDepot}</p>}
+        </div>
+      ) : (
+        <p className="hint">
+          Bon de livraison <span className="mono">{l.numero}</span> signé{l.signataire ? ` par ${l.signataire}` : ''}
+          {l.le ? ` le ${new Date(l.le).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Paris' })}` : ''}.
+        </p>
+      )}
+      {l.photos.length > 0 && (
+        <div className="photo-row">
+          {l.photos.map((p) => (
+            <a key={p.id} href={p.originale} target="_blank" rel="noreferrer">
+              <img src={p.vignette} alt="Photo du dépôt" />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {d.litiges.map((x) => (
+        <article key={x.id} className="dispute">
+          <div className="dispute-head">
+            <strong>
+              {MOTIF[x.motif]} · <span className="mono">{x.numero}</span>
+            </strong>
+            <StatusPill label={DISPUTE_STATUS[x.statut]} tone={x.statut === 'RESOLU' ? 'lime' : x.statut === 'REJETE' ? 'alert' : 'neutral'} />
+          </div>
+          <p>{x.description}</p>
+          {x.articles.length > 0 && <small className="hint">Biens concernés : {x.articles.map((a) => a.libelle).join(', ')}</small>}
+          {x.photos.length > 0 && (
+            <div className="photo-row">
+              {x.photos.map((p) => (
+                <a key={p.id} href={p.originale} target="_blank" rel="noreferrer">
+                  <img src={p.vignette} alt="Photo jointe" />
+                </a>
+              ))}
+            </div>
+          )}
+          {x.reponse && (
+            <p className="dispute-answer">
+              <strong>Réponse de JAMYSTOCK :</strong> {x.reponse}
+              {x.gesteCents ? ` Geste commercial de ${euros(x.gesteCents)} HT, déduit de votre prochaine facture.` : ''}
+            </p>
+          )}
+        </article>
+      ))}
+
+      {l.signalementPossible && !pending && !readOnly &&
+        (open ? (
+          <DisputeForm orderId={orderId} articles={l.articles} onDone={() => (setOpen(false), void load())} onCancel={() => setOpen(false)} />
+        ) : (
+          <>
+            <button type="button" className="btn secondary" onClick={() => setOpen(true)}>
+              Signaler un problème
+            </button>
+            <p className="hint small">Possible jusqu’au {l.signalementJusquau ? new Date(l.signalementJusquau).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Paris' }) : ''}.</p>
+          </>
+        ))}
+      {!l.signalementPossible && !d.litiges.length && <p className="hint small">Le délai de 48 heures pour signaler un problème en ligne est passé : contactez-nous directement.</p>}
+    </section>
+  );
+}
+
+function DisputeForm({ orderId, articles, onDone, onCancel }: { orderId: string; articles: { id: string; libelle: string }[]; onDone: () => void; onCancel: () => void }) {
+  const [motif, setMotif] = useState<Dispute['motif']>('CASSE');
+  const [description, setDescription] = useState('');
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await post<{ id: string; numero: string }>('/me/disputes', { commandeId: orderId, motif, description: description.trim(), articleIds: [...chosen] });
+      for (const f of files) {
+        await api(`/me/disputes/${r.id}/photos/${crypto.randomUUID()}`, { method: 'PUT', body: f, headers: { 'Content-Type': f.type } });
+      }
+      onDone();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="form-card dispute-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      <h3>Signaler un problème</h3>
+      <label>
+        Nature du problème
+        <select value={motif} onChange={(e) => setMotif(e.target.value as Dispute['motif'])}>
+          {Object.entries(MOTIF).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </label>
+      {articles.length > 0 && (
+        <fieldset className="checks">
+          <legend>Biens concernés</legend>
+          {articles.map((a) => (
+            <label key={a.id} className="check">
+              <input
+                type="checkbox"
+                checked={chosen.has(a.id)}
+                onChange={(e) => {
+                  const n = new Set(chosen);
+                  if (e.target.checked) n.add(a.id);
+                  else n.delete(a.id);
+                  setChosen(n);
+                }}
+              />{' '}
+              {a.libelle}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <label>
+        Ce qui s’est passé
+        <textarea rows={4} value={description} maxLength={3000} onChange={(e) => setDescription(e.target.value)} placeholder="Ex. un pied de chaise est cassé, constaté au déballage" />
+      </label>
+      <label>
+        Photos (6 au plus, JPEG ou PNG)
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 6))} />
+      </label>
+      {files.length > 0 && <small className="hint">{files.length} photo{files.length > 1 ? 's' : ''} jointe{files.length > 1 ? 's' : ''}</small>}
+      {error && <Banner kind="error">{error}</Banner>}
+      <div className="row-actions">
+        <button type="submit" className="btn primary" disabled={busy || description.trim().length < 10}>
+          {busy ? 'Envoi…' : 'Envoyer le signalement'}
+        </button>
+        <button type="button" className="btn ghost" onClick={onCancel}>
+          Annuler
+        </button>
+      </div>
+    </form>
   );
 }

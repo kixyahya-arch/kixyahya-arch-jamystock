@@ -34,6 +34,7 @@ export interface OrderRow {
   date_souhaitee: string | null;
   date_confirmee: string | null;
   creneau_confirme: string | null;
+  depot_sans_signature: boolean;
   historique_statuts: { statut: OrderStatus; le: string; par: string }[];
 }
 
@@ -44,6 +45,8 @@ export interface SubmitInput {
   contactSite?: { nom: string; telephone: string };
   dateSouhaitee: string;
   creneau?: string;
+  /** LIV-05 : le client autorise le dépôt sans signature s'il est absent */
+  depotSansSignature?: boolean;
 }
 
 export interface CollectionInput {
@@ -244,7 +247,8 @@ export class OrdersService {
 
       await tx.query(
         `UPDATE commande SET type = $2, adresse = $3, contraintes_acces = $4, contact_site = $5, date_souhaitee = $6,
-                creneau_souhaite = $7, depot_id = $8, volume_m3 = $9, poids_kg = $10, vehicule_suggere = $11, numero = $12
+                creneau_souhaite = $7, depot_id = $8, volume_m3 = $9, poids_kg = $10, vehicule_suggere = $11, numero = $12,
+                depot_sans_signature = $13
           WHERE id = $1`,
         [
           order.id,
@@ -259,6 +263,7 @@ export class OrdersService {
           weight || null,
           vehicle?.code ?? null,
           formatDocumentNumber('CMD', year, seq),
+          input.type === 'LIVRAISON' && !!input.depotSansSignature,
         ],
       );
       // le changement de statut active les lignes ; l'index unique partiel garantit
@@ -522,6 +527,19 @@ export class OrdersService {
     }
     const veille = new Date(`${day}T00:00:00Z`);
     veille.setUTCDate(veille.getUTCDate() - 1);
+    // CMD-09 : un article demandé sans le reste de son UM est à dégrouper ; une UM demandée en entier part telle quelle.
+    // Calculé à la planification, par le personnel qui voit toute l'UM (un utilisateur B2B ne voit que ses projets).
+    await tx.query(
+      `UPDATE ligne_commande l SET um_a_degrouper = a.um_courante_id
+         FROM article a
+        WHERE l.commande_id = $1 AND a.id = l.article_id AND a.um_courante_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM article x WHERE x.um_courante_id = a.um_courante_id AND x.statut IN ('EN_STOCK','RESERVE')
+                  AND NOT EXISTS (SELECT 1 FROM ligne_commande y WHERE y.commande_id = $1 AND y.article_id = x.id))`,
+      [order.id],
+    );
+    // CMD-09 : mission de dégroupage avant la préparation quand des articles sont à sortir de leur UM
+    const split = await tx.query('SELECT 1 FROM ligne_commande WHERE commande_id = $1 AND active AND um_a_degrouper IS NOT NULL LIMIT 1', [order.id]);
+    if (split.rowCount) await insert('DEGROUPAGE', veille.toISOString().slice(0, 10), '10:00');
     await insert('PREPARATION', veille.toISOString().slice(0, 10), '14:00');
     await insert(order.type === 'RETRAIT' ? 'RETRAIT' : 'LIVRAISON', day, '08:00');
   }
@@ -545,7 +563,11 @@ export class OrdersService {
     const lignes = await tx.query<{ longueur_m: number | null; largeur_m: number | null; hauteur_m: number | null }>(
       `SELECT l.id, l.article_id AS "articleId", l.description_libre AS "descriptionLibre", l.statut_ligne AS "statutLigne",
               a.libelle, a.qr_code AS "qrCode", a.longueur_m, a.largeur_m, a.hauteur_m,
-              (a.id IS NULL OR a.statut = 'EN_STOCK' OR c.statut <> 'BROUILLON') AS disponible
+              (a.id IS NULL OR a.statut = 'EN_STOCK' OR c.statut <> 'BROUILLON') AS disponible,
+              -- CMD-09 : article rangé sur une UM, avec le nombre de biens de cette UM
+              CASE WHEN a.um_courante_id IS NOT NULL THEN
+                (SELECT count(*)::int FROM article x WHERE x.um_courante_id = a.um_courante_id AND x.statut IN ('EN_STOCK','RESERVE','EN_PREPARATION')) END AS "umTotal",
+              (l.um_a_degrouper IS NOT NULL) AS "aDegrouper"
          FROM ligne_commande l JOIN commande c ON c.id = l.commande_id LEFT JOIN article a ON a.id = l.article_id
         WHERE l.commande_id = $1 ORDER BY l.id`,
       [order.id],
@@ -568,6 +590,7 @@ export class OrdersService {
       motifRefus: c.motif_refus,
       adresse: c.adresse,
       contactSite: c.contact_site,
+      depotSansSignature: c.depot_sans_signature,
       historique: c.historique_statuts,
       nbArticles: lignes.rows.length,
       volumeM3: vol,

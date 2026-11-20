@@ -61,6 +61,8 @@ export type FieldAction =
   | { type: 'PICK'; payload: { missionId: string; articleQr: string } }
   | { type: 'PICK_MISSING'; payload: { missionId: string; articleId: string; photoId?: string; commentaire?: string } }
   | { type: 'PICK_COMPLETE'; payload: { missionId: string } }
+  /** CMD-09 : sortir de son UM un article demandé seul (mission de dégroupage) ; les autres restent sur l'UM */
+  | { type: 'UM_SPLIT'; payload: { missionId: string; articleQr: string } }
   | { type: 'LOAD'; payload: { missionId: string; articleQr: string } }
   | { type: 'DEPART'; payload: { missionId: string } }
   | { type: 'ARRIVE'; payload: { missionId: string; gps?: GpsFix } }
@@ -82,6 +84,8 @@ export interface BlSignPayload {
   signatureSvg: string;
   signedAt: string;
   gps?: GpsFix;
+  /** LIV-05 : destinataire absent, dépôt sans signature autorisé par le client (3 photos minimum du dépôt) */
+  depot?: { lieu: string; photoIds: string[] };
   /** SHA-256 calculé par le terminal sur blContent(...) */
   empreinte: string;
 }
@@ -131,6 +135,8 @@ export function blContent(p: Omit<BlSignPayload, 'empreinte' | 'gps'>) {
     signataire: { nom: p.signataire.nom, qualite: p.signataire.qualite },
     signatureSvg: p.signatureSvg,
     signedAt: p.signedAt,
+    // présent seulement pour un dépôt sans signature : l'empreinte des BL signés ne change pas
+    ...(p.depot ? { depot: { lieu: p.depot.lieu, photoIds: [...p.depot.photoIds].sort() } } : {}),
   };
 }
 

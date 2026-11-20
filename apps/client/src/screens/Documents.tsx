@@ -23,6 +23,8 @@ interface Doc {
   typeCommande?: string;
   projet?: string | null;
   nbReserves?: number;
+  /** LIV-05 : déposé sans signature */
+  nonSigne?: boolean;
 }
 
 type Filter = '' | 'FACTURE' | 'AVOIR' | 'BL';
@@ -30,7 +32,8 @@ type Filter = '' | 'FACTURE' | 'AVOIR' | 'BL';
 const BL_LABEL: Record<string, string> = { LIVRAISON: 'Bon de livraison', RETRAIT: 'Bon de retrait', REFUS: 'Livraison refusée', ENLEVEMENT: 'Bon d’enlèvement' };
 const INVOICE_STATUS: Record<string, string> = { EMISE: 'À régler', PAYEE: 'Payée', EN_RETARD: 'En retard', ANNULEE: 'Annulée par avoir' };
 
-const title = (d: Doc) => (d.type === 'BL' ? (BL_LABEL[d.typeBl ?? ''] ?? 'Bon de livraison') : d.type === 'AVOIR' ? 'Avoir' : 'Facture');
+const title = (d: Doc) =>
+  d.type === 'BL' ? `${BL_LABEL[d.typeBl ?? ''] ?? 'Bon de livraison'}${d.nonSigne ? ' (non signé, déposé)' : ''}` : d.type === 'AVOIR' ? 'Avoir' : 'Facture';
 const monthOf = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 const pathOf = (d: Doc) => `/me/documents/${d.type.toLowerCase()}/${d.id}/pdf`;
 
@@ -219,7 +222,7 @@ export function Documents({ ctx, role }: { ctx: Ctx; role: string }) {
                   ) : (
                     <span className="cap">{d.periodeDebut ? monthOf(d.periodeDebut) : ''}</span>
                   )}
-                  <span className="doc-date">{d.type === 'BL' ? `Signé le ${dateFr(d.date)}` : `Émise le ${dateFr(d.date)}`}</span>
+                  <span className="doc-date">{d.type === 'BL' ? `${d.nonSigne ? 'Déposé' : 'Signé'} le ${dateFr(d.date)}` : `Émise le ${dateFr(d.date)}`}</span>
                 </span>
                 <span className="doc-amount">
                   {d.totalTtcCents != null && <strong>{euros(d.totalTtcCents)}</strong>}

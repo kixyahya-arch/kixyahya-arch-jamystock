@@ -76,6 +76,7 @@ export interface OrderDetail extends Omit<OrderRow, 'urgent' | 'missionsAAffecte
   poidsKg: number | null;
   vehiculeSuggere: string | null;
   descriptionCollecte: string | null;
+  depotSansSignature?: boolean;
   historique: { statut: string; le: string; par: string }[];
   lignes: {
     id: string;

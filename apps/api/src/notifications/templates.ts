@@ -17,7 +17,7 @@ export interface TemplateContext {
 type Vars = Record<string, unknown>;
 
 /** Messages transactionnels : envoyés quelles que soient les préférences de l'utilisateur (§6.3). */
-export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU', 'RELANCE_IMPAYE', 'EXPORT_PRET', 'PHOTO_PRETE']);
+export const TRANSACTIONAL = new Set(['INVITATION', 'LIVRAISON_EFFECTUEE', 'FACTURE_EMISE', 'PAIEMENT_ECHOUE', 'PAIEMENT_RECU', 'RELANCE_IMPAYE', 'EXPORT_PRET', 'PHOTO_PRETE', 'LITIGE_RECU', 'LITIGE_TRAITE']);
 
 /** Événements réglables par l'utilisateur dans « Mon compte ». */
 export const OPTIONAL_EVENTS: { modele: string; libelle: string }[] = [
@@ -79,7 +79,12 @@ function spec(modele: string, v: Vars): Spec | null {
     case 'LIVRAISON_EFFECTUEE':
       return {
         subject: `Livraison effectuée : ${v.numero ?? ''}`.trim(),
-        lines: [`${num.charAt(0).toUpperCase()}${num.slice(1)} a été livrée${v.reserves ? ' avec réserves' : ''}. Le bon de livraison signé est disponible dans vos documents.`],
+        lines: v.nonSigne
+          ? [
+              `${num.charAt(0).toUpperCase()}${num.slice(1)} a été déposée en votre absence, comme vous l’aviez autorisé${v.lieuDepot ? ` : ${v.lieuDepot}` : ''}.`,
+              'Le bon de livraison, marqué « non signé, déposé », et les photos du dépôt sont dans vos documents. Un problème ? Signalez-le dans les 48 heures depuis la commande.',
+            ]
+          : [`${num.charAt(0).toUpperCase()}${num.slice(1)} a été livrée${v.reserves ? ' avec réserves' : ''}. Le bon de livraison signé est disponible dans vos documents.`],
         action: { label: 'Voir le bon de livraison', path: order },
       };
     case 'ARTICLES_MIS_EN_STOCK':
@@ -125,6 +130,26 @@ function spec(modele: string, v: Vars): Spec | null {
         subject: 'Votre inventaire illustré est prêt',
         lines: [`L’export PDF de votre inventaire (${v.nbArticles ?? 0} bien${Number(v.nbArticles) > 1 ? 's' : ''}) est prêt. Il reste téléchargeable 7 jours depuis votre Espace Client.`],
         action: { label: 'Télécharger l’inventaire', path: '#/?exports=1' },
+      };
+    case 'LITIGE_RECU':
+      return {
+        subject: `Signalement reçu : ${v.litige ?? ''}`.trim(),
+        lines: [`Nous avons bien reçu votre signalement sur ${num}. Notre équipe l’examine et vous répond rapidement.`],
+        action: { label: 'Suivre le signalement', path: order },
+      };
+    case 'LITIGE_TRAITE':
+      return {
+        subject: `Réponse à votre signalement : ${v.litige ?? ''}`.trim(),
+        lines: [
+          v.statut === 'REJETE'
+            ? `Nous avons examiné votre signalement sur ${num} et ne pouvons pas y donner suite.`
+            : v.statut === 'RESOLU'
+              ? `Votre signalement sur ${num} est résolu.`
+              : `Votre signalement sur ${num} est pris en charge.`,
+          v.reponse ? `Notre réponse : ${v.reponse}` : '',
+          typeof v.gesteCents === 'number' && v.gesteCents > 0 ? `Un geste commercial de ${euros(v.gesteCents)} HT sera déduit de votre prochaine facture.` : '',
+        ].filter(Boolean),
+        action: { label: 'Voir le détail', path: order },
       };
     case 'PHOTO_PRETE':
       return {

@@ -630,7 +630,8 @@ export class BillingService {
       await tx.query<{
         id: string; tenant_id: string; numero: string; type: 'LIVRAISON' | 'RETRAIT' | 'REFUS' | 'ENLEVEMENT'; commande_id: string; signataire_nom: string | null;
         signataire_qualite: string | null; signature_svg: string | null; signe_le: Date | null; recu_le: Date; latitude: number | null; longitude: number | null;
-        precision_m: number | null; empreinte_sha256: string | null; cle_pdf: string | null; empreinte_pdf_sha256: string | null; statut: string;
+        precision_m: number | null; empreinte_sha256: string | null; cle_pdf: string | null; empreinte_pdf_sha256: string | null; statut: string; lieu_depot: string | null;
+        contenu: { depot?: { photoIds?: string[] } } | null;
         cnum: string | null; ctype: string; adresse: { libelle?: string } | null; client: string; projet: string | null;
       }>(
         `SELECT b.*, c.numero AS cnum, c.type AS ctype, c.adresse, e.nom AS client, p.nom AS projet
@@ -640,7 +641,7 @@ export class BillingService {
       )
     ).rows[0];
     if (!bl) throw notFound('BL');
-    if (bl.statut !== 'SIGNE') throw conflict('BL_NON_SIGNE', 'BL non signé');
+    if (bl.statut !== 'SIGNE' && bl.statut !== 'NON_SIGNE_DEPOSE') throw conflict('BL_NON_SIGNE', 'BL non signé');
     if (bl.cle_pdf) {
       const stored = await this.storage.get(bl.cle_pdf).catch(() => undefined);
       if (stored) return { name: `${bl.numero}.pdf`, data: stored, date: new Date(bl.signe_le ?? bl.recu_le) };
@@ -678,6 +679,11 @@ export class BillingService {
       reserves: reserves.rows,
       signatureSvg: bl.signature_svg,
       empreinte: bl.empreinte_sha256,
+      depot:
+        bl.statut === 'NON_SIGNE_DEPOSE'
+          ? // le contenu signé fait foi (les photos sans bien rattaché ne sont pas lisibles par le client)
+            { lieu: bl.lieu_depot, nbPhotos: bl.contenu?.depot?.photoIds?.length ?? 0 }
+          : null,
     });
     const key = `${bl.tenant_id}/bl/${bl.numero}.pdf`;
     await this.storage.put(key, data);
