@@ -177,8 +177,7 @@ button {
   display: flex;
   gap: 18px;
   flex: 1;
-  min-width: 0;
-  justify-content: center;
+  justify-content: safe center;
 }
 .main-nav a {
   font-size: 0.92rem;
@@ -207,12 +206,12 @@ button {
   color: #c7d6e2;
 }
 /* écrans portables : le nom de l'utilisateur laisse la place aux liens (il reste dans « Mon compte » en pied de page) */
-@media (max-width: 1440px) {
+@media (max-width: 1600px) {
   .who {
     display: none;
   }
 }
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   .header-row {
     flex-wrap: wrap;
     gap: 10px 16px;
