@@ -1,11 +1,12 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import { formatEuros } from '@jamystock/domain';
 import { BRAND, drawBrandRule, drawBrandSymbol } from '../common/brand-pdf.js';
+import { embedArchiveFonts, markPdfA } from './pdfa.js';
 
 /**
  * PDF des factures, avoirs et BL (§7.6, SUI-03) en pur JavaScript (pdf-lib) : aucun navigateur ni service
- * externe à faire tourner sur l'hébergement. Polices standard PDF (WinAnsi) : les caractères hors de ce jeu
- * sont remplacés plutôt que de faire échouer la génération.
+ * externe à faire tourner sur l'hébergement. Format d'archivage PDF/A-3b (pdfa.ts) : polices incorporées ;
+ * un caractère absent de la police est remplacé plutôt que de faire échouer la génération.
  */
 
 // charte JAMYSTOCK (docs/charte-graphique.md) : encre pour le texte, clair pour le total, filet dégradé en haut de page
@@ -22,14 +23,18 @@ class Writer {
   page!: PDFPage;
   y = 0;
   pages: PDFPage[] = [];
-  private readonly ok = new Map<string, boolean>();
+  private readonly chars: Set<number>;
 
   constructor(
     readonly doc: PDFDocument,
     readonly regular: PDFFont,
     readonly bold: PDFFont,
     private readonly footer: string,
+    readonly title: string,
   ) {
+    // PDF/A : aucun glyphe manquant (.notdef) ; on ne garde que les caractères présents dans les deux graisses
+    const bolds = new Set(bold.getCharacterSet());
+    this.chars = new Set(regular.getCharacterSet().filter((c) => bolds.has(c)));
     this.newPage();
   }
 
@@ -40,22 +45,12 @@ class Writer {
     this.y = A4[1] - M;
   }
 
-  /** Texte encodable en WinAnsi. */
+  /** Texte affichable avec les polices incorporées. */
   safe(text: string): string {
     let out = '';
     for (const ch of text) {
       const c = REPLACEMENTS[ch] ?? ch;
-      let good = this.ok.get(c);
-      if (good === undefined) {
-        try {
-          this.regular.encodeText(c);
-          good = true;
-        } catch {
-          good = false;
-        }
-        this.ok.set(c, good);
-      }
-      out += good ? c : '?';
+      out += [...c].every((x) => this.chars.has(x.codePointAt(0)!)) ? c : '?';
     }
     return out;
   }
@@ -124,16 +119,17 @@ async function open(title: string, footer: string) {
   doc.setTitle(title);
   doc.setProducer('JAMYSTOCK');
   doc.setCreator('JAMYSTOCK');
-  // date de création fixe = date du document : deux générations du même document donnent le même contenu
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  return new Writer(doc, regular, bold, footer);
+  const { regular, bold } = await embedArchiveFonts(doc);
+  return new Writer(doc, regular, bold, footer, title);
 }
 
+// date de création fixe = date du document (à la seconde) : deux générations du même document donnent le même contenu
 async function save(w: Writer, at: Date): Promise<Buffer> {
-  w.doc.setCreationDate(at);
-  w.doc.setModificationDate(at);
+  const d = new Date(Math.floor(at.getTime() / 1000) * 1000);
+  w.doc.setCreationDate(d);
+  w.doc.setModificationDate(d);
   w.finish();
+  markPdfA(w.doc, { title: w.title, at: d, producer: 'JAMYSTOCK' });
   return Buffer.from(await w.doc.save({ useObjectStreams: false }));
 }
 
@@ -308,6 +304,10 @@ export interface BlPdfData {
   empreinte: string | null;
   /** LIV-05 : destinataire absent, dépôt sans signature autorisé par le client */
   depot?: { lieu: string | null; nbPhotos: number } | null;
+  /** horodatage serveur de réception du BL signé (§4.3) */
+  recuLe?: Date | null;
+  /** photos du BL (réserves, dépôt, livraison) en annexe, déjà converties en JPEG */
+  photos?: { jpeg: Buffer; legende: string }[];
 }
 
 const BL_TITLE: Record<BlPdfData['type'], string> = {
@@ -336,6 +336,7 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
     ...(d.commande ? ([['Demande', d.commande]] as [string, string][]) : []),
     ...(d.adresse ? ([['Adresse', d.adresse]] as [string, string][]) : []),
     [d.depot ? 'Déposé le' : 'Signé le', `${dateFr(d.signeLe)} à ${d.signeLe.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}`],
+    ...(d.recuLe ? ([['Reçu le', `${dateFr(d.recuLe)} à ${d.recuLe.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit' })} (horodatage du serveur)`]] as [string, string][]) : []),
     ...(d.gps ? ([['Position', `${d.gps.lat.toFixed(5)}, ${d.gps.lng.toFixed(5)}${d.gps.precision ? ` (± ${Math.round(d.gps.precision)} m)` : ''}`]] as [string, string][]) : []),
   ];
   for (const [k, v] of facts) {
@@ -372,6 +373,7 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
     w.text(`Lieu du dépôt : ${d.depot.lieu ?? '—'} · ${d.depot.nbPhotos} photo${d.depot.nbPhotos > 1 ? 's' : ''} du dépôt dans l’Espace Client.`, M + 14, w.y - 40, { size: 9, color: MUTED });
     w.y -= 78;
     if (d.empreinte) w.para(`Empreinte SHA-256 du contenu déposé : ${d.empreinte}`, { size: 7.5, color: MUTED });
+    await annex(w, d.photos);
     return save(w, d.signeLe);
   }
 
@@ -391,7 +393,35 @@ export async function blPdf(d: BlPdfData): Promise<Buffer> {
       color: MUTED,
     });
   }
+  await annex(w, d.photos);
   return save(w, d.signeLe);
+}
+
+/** Annexe photos du BL : deux photos par page, avec leur légende. */
+async function annex(w: Writer, photos: BlPdfData['photos']) {
+  if (!photos?.length) return;
+  const maxW = A4[0] - 2 * M;
+  const maxH = (A4[1] - 2 * M - 120) / 2;
+  for (const [i, p] of photos.entries()) {
+    let img: PDFImage;
+    try {
+      img = await w.doc.embedJpg(p.jpeg);
+    } catch {
+      continue; // photo illisible : le BL part quand même
+    }
+    if (i % 2 === 0) {
+      w.newPage();
+      w.text(i === 0 ? `Annexe : photos (${photos.length})` : 'Annexe : photos (suite)', M, w.y, { size: 11, font: w.bold });
+      w.y -= 22;
+    }
+    const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+    const iw = img.width * scale;
+    const ih = img.height * scale;
+    w.page.drawImage(img, { x: M, y: w.y - ih, width: iw, height: ih });
+    w.y -= ih + 12;
+    w.text(p.legende, M, w.y, { size: 8.5, color: MUTED });
+    w.y -= 22;
+  }
 }
 
 /** Trace la signature manuscrite (SVG de tracés produits par l'app terrain) dans le cadre donné. */

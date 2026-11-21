@@ -2027,3 +2027,257 @@ label.inline {
   cursor: pointer;
   width: 100%;
 }
+
+/* ——— RG-AL-03 : avertissement de dépassement avant validation ——— */
+.banner.warn {
+  background: #fff7e6;
+  border-color: #d97706;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .banner.warn {
+    background: #3a2a0c;
+    border-color: #f5b041;
+  }
+}
+:root[data-theme='dark'] .banner.warn {
+  background: #3a2a0c;
+  border-color: #f5b041;
+}
+
+/* ——— CMD-06 : assistant de volume par type d'objet ——— */
+.volume-helper {
+  margin: 18px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 14px;
+}
+.volume-helper > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 600;
+}
+.volume-helper > .hint {
+  margin: 4px 0 14px;
+}
+.object-types {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 6px 18px;
+}
+.object-types li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.object-types li.on > span:first-child {
+  font-weight: 600;
+}
+.object-types small {
+  display: block;
+  font-weight: 400;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.stepper button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.stepper input {
+  width: 48px;
+  min-height: 34px;
+  margin: 0 4px;
+  padding: 6px 2px;
+  text-align: center;
+}
+
+/* ——— CMD-06 : photos facultatives ——— */
+.photo-field {
+  margin: 18px 0 6px;
+}
+.photo-field .label {
+  font-weight: 600;
+}
+.photo-field .hint.small {
+  margin: 2px 0 10px;
+}
+.photo-previews {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.photo-previews li {
+  position: relative;
+  width: 88px;
+  height: 88px;
+}
+.photo-previews img,
+.photo-previews a {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.photo-previews button {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+}
+.file-btn {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  cursor: pointer;
+}
+.file-btn input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ——— RG-AL-05 : biens dormants ——— */
+.dormant-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 16px;
+}
+.dormant-summary p {
+  margin: 0;
+}
+.dormant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.dormant-list li {
+  display: grid;
+  grid-template-columns: auto 64px minmax(0, 1fr) auto 80px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dormant-list li.on {
+  background: var(--accent-soft);
+}
+.dormant-list .check {
+  margin: 0;
+  padding: 0 0 0 6px;
+}
+.dormant-list .thumbimg {
+  width: 64px;
+  height: 64px;
+}
+.dormant-list li > div:nth-child(3) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dormant-list li > div:nth-child(3) a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dormant-meta {
+  display: grid;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .dormant-list li {
+    grid-template-columns: auto 52px minmax(0, 1fr);
+  }
+  .dormant-list .thumbimg {
+    width: 52px;
+    height: 52px;
+  }
+  .dormant-list .dormant-meta {
+    grid-column: 3;
+    text-align: left;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+  }
+}
+.sticky-action {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--surface);
+}
+.sticky-action .btn.primary {
+  margin: 0;
+}
+
+/* ——— Jauge : actions (forfait supérieur, biens dormants) ——— */
+.gauge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-top: 12px;
+}
+.gauge-actions a {
+  font-weight: 600;
+}
+.upgrade-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  max-width: 520px;
+}
+.upgrade-form label {
+  margin: 0;
+}
+
+.hint.error-text {
+  color: var(--danger);
+}
+
+.photo-field h3 {
+  margin: 22px 0 10px;
+  font-size: 1rem;
+}

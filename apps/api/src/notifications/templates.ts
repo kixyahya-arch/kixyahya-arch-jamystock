@@ -28,6 +28,9 @@ export const OPTIONAL_EVENTS: { modele: string; libelle: string }[] = [
   { modele: 'CRENEAU_CONFIRME', libelle: 'Créneau confirmé ou contre-proposé' },
   { modele: 'CHAUFFEUR_EN_ROUTE', libelle: 'Chauffeur en route' },
   { modele: 'ARTICLES_MIS_EN_STOCK', libelle: 'Biens mis en stock après une collecte' },
+  { modele: 'ALERTE_PRE', libelle: 'Forfait bientôt atteint (90 %)' },
+  { modele: 'ALERTE_PREVISION', libelle: 'Collecte qui fera dépasser le forfait (administrateurs)' },
+  { modele: 'RAPPORT_DORMANTS', libelle: 'Rapport trimestriel des biens dormants' },
 ];
 
 const esc = (v: unknown) =>
@@ -184,6 +187,65 @@ function spec(modele: string, v: Vars): Spec | null {
         ].filter(Boolean),
         action: { label: 'Voir le bien', path: `#/article/${v.articleId}` },
       };
+    case 'ALERTE_PRE':
+      return {
+        subject: v.copieExploitant ? `Pré-alerte forfait : ${v.entreprise} à ${v.taux} %` : `Votre forfait est utilisé à ${v.taux} %`,
+        lines: [
+          v.copieExploitant
+            ? `${v.entreprise} occupe ${v.m2Occupes} m² pour ${v.m2Inclus} m² inclus dans son forfait.`
+            : `Vos biens occupent ${v.m2Occupes} m² au dépôt, pour ${v.m2Inclus} m² inclus dans votre forfait.`,
+          v.copieExploitant
+            ? 'Un point avec le client peut éviter un dépassement : forfait supérieur ou restitution de biens.'
+            : 'Au-delà, chaque m² supplémentaire est facturé. Vous pouvez faire livrer des biens ou demander un forfait supérieur depuis votre Espace Client.',
+        ],
+        action: { label: 'Voir ma surface', path: '#/' },
+      };
+    case 'ALERTE_DEPASSEMENT':
+      return {
+        subject: v.copieExploitant ? `Dépassement de forfait : ${v.entreprise}` : 'Votre forfait est dépassé',
+        lines: [
+          `${v.copieExploitant ? `${v.entreprise} occupe` : 'Vos biens occupent'} ${v.m2Occupes} m² depuis au moins 3 jours, pour ${v.m2Inclus} m² inclus (${v.m2Depassement} m² de plus).`,
+          `À ce rythme, le dépassement coûtera environ ${euros(v.coutMensuelCents)} HT sur le mois.`,
+          v.copieExploitant ? '' : 'Deux solutions depuis votre Espace Client : passer au forfait supérieur, ou programmer une restitution des biens dont vous n’avez plus besoin.',
+        ].filter(Boolean),
+        action: { label: v.copieExploitant ? 'Voir les clients' : 'Passer au forfait supérieur ou restituer', path: '#/' },
+      };
+    case 'ALERTE_SOUS_UTILISATION':
+      return {
+        subject: `Forfait sous-utilisé : ${v.entreprise}`,
+        lines: [
+          `${v.entreprise} occupe moins de 60 % de son forfait depuis 60 jours (${v.m2Occupes} m² pour ${v.m2Inclus} m² inclus).`,
+          'Proposer un forfait ajusté fidélise le client avant qu’il ne le demande.',
+        ],
+      };
+    case 'ALERTE_PREVISION':
+      return {
+        subject: `Collecte à venir : forfait dépassé de ${v.m2Depassement} m²`,
+        lines: [
+          `${v.demandeur ?? 'Un utilisateur'} a demandé la collecte ${v.numero ?? ''}${v.projet ? ` pour le projet ${v.projet}` : ''}.`.replace(' .', '.'),
+          `Une fois rangée, la surface prévue sera d’environ ${v.m2Prevus} m² pour ${v.m2Inclus} m² inclus dans votre forfait.`,
+          'Vous pouvez faire livrer d’autres biens, demander un forfait supérieur, ou accepter le dépassement, facturé au prorata.',
+        ],
+        action: { label: 'Voir la demande', path: order },
+      };
+    case 'RAPPORT_DORMANTS':
+      return {
+        subject: `${v.nbArticles} bien${Number(v.nbArticles) > 1 ? 's' : ''} sans mouvement depuis un an`,
+        lines: [
+          `${v.nbArticles} de vos biens n’${Number(v.nbArticles) > 1 ? 'ont' : 'a'} pas bougé du dépôt depuis au moins 12 mois.`,
+          'Le rapport les liste avec leur photo et la surface qu’ils occupent. Vous pouvez vous les faire livrer ou les garder en stock.',
+        ],
+        action: { label: 'Voir le rapport', path: '#/dormants' },
+      };
+    case 'DEMANDE_FORFAIT':
+      return {
+        subject: `Demande de forfait supérieur : ${v.entreprise}`,
+        lines: [
+          `${v.demandeur} (${v.entreprise}) demande un forfait supérieur.`,
+          `Surface actuelle : ${v.m2Occupes} m² pour ${v.m2Inclus} m² inclus.${v.m2Souhaites ? ` Surface souhaitée : ${v.m2Souhaites} m².` : ''}`,
+          v.message ? `Message : ${v.message}` : '',
+        ].filter(Boolean),
+      };
     case 'PAIEMENT_RECU':
       return { subject: `Paiement reçu : facture ${v.numero}`, lines: [`Nous avons bien reçu votre paiement de ${euros(v.montantCents)} pour la facture ${v.numero}. Merci.`], action: { label: 'Mes documents', path: '#/documents' } };
     default:
@@ -221,6 +283,10 @@ export const EDITABLE: { modele: string; libelle: string; exemple: Vars }[] = [
   { modele: 'LITIGE_RECU', libelle: 'Signalement reçu', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', litige: 'LIT-2026-000003' } },
   { modele: 'LITIGE_TRAITE', libelle: 'Réponse à un signalement', exemple: { numero: 'CMD-2026-000042', commandeId: 'exemple', litige: 'LIT-2026-000003', statut: 'RESOLU', reponse: 'Le plateau sera remplacé.' } },
   { modele: 'PHOTO_PRETE', libelle: 'Photo ou constat prêt', exemple: { libelle: 'Bureau d’accueil 1', articleId: 'exemple', demande: 'PHOTO' } },
+  { modele: 'ALERTE_PRE', libelle: 'Forfait utilisé à 90 %', exemple: { entreprise: 'Promotion Horizon SAS', m2Occupes: 110, m2Inclus: 120, taux: 92, copieExploitant: false } },
+  { modele: 'ALERTE_DEPASSEMENT', libelle: 'Forfait dépassé', exemple: { entreprise: 'Promotion Horizon SAS', m2Occupes: 131.5, m2Inclus: 120, m2Depassement: 11.5, coutMensuelCents: 19550, copieExploitant: false } },
+  { modele: 'ALERTE_PREVISION', libelle: 'Collecte qui fera dépasser le forfait', exemple: { numero: 'CMD-2026-000043', commandeId: 'exemple', demandeur: 'Julien Martin', projet: 'Les Tilleuls', m2Prevus: 128, m2Inclus: 120, m2Depassement: 8 } },
+  { modele: 'RAPPORT_DORMANTS', libelle: 'Rapport des biens dormants', exemple: { nbArticles: 14, trimestre: '2027-T1' } },
 ];
 
 /** Repères utilisables dans un modèle : les variables de l'exemple. */

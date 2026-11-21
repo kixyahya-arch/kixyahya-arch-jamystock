@@ -1,4 +1,5 @@
 import { inflateRawSync } from 'node:zlib';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { blPdf, invoicePdf } from '../src/billing/pdf.js';
 import { crc32, zip } from '../src/billing/zip.js';
@@ -93,5 +94,50 @@ describe('conditions de paiement', () => {
     expect(paymentDays('à 60j')).toBe(60);
     expect(paymentDays(null)).toBe(30);
     expect(paymentDays('à réception')).toBe(30);
+  });
+});
+
+describe('archivage PDF/A-3b (§7.6)', () => {
+  const bl = (photos?: { jpeg: Buffer; legende: string }[]) =>
+    blPdf({
+      issuer,
+      numero: 'BL-2026-000009',
+      type: 'LIVRAISON',
+      commande: 'CMD-2026-000013',
+      client: 'Promotion Horizon SAS',
+      signeLe: new Date('2026-11-12T09:41:00.456Z'),
+      recuLe: new Date('2026-11-12T09:41:07Z'),
+      signataire: { nom: 'Paul Leroy', qualite: null },
+      articles: [{ libelle: 'Bureau « direction » chêne — €', qr: 'A-000123', etat: 'LIVRE' }],
+      reserves: [{ article: 'Bureau', type: 'RAYURE', commentaire: 'Rayure ≥ 3 cm 中' }],
+      signatureSvg: SIGNATURE,
+      empreinte: 'ab'.repeat(32),
+      photos,
+    });
+
+  it('polices incorporées, profil sRGB, métadonnées XMP PDF/A-3B et identifiant de fichier', async () => {
+    const pdf = (await bl()).toString('latin1');
+    expect(pdf.slice(0, 15)).toMatch(/^%PDF-1\.7\n%[\x80-\xff]{4}/);
+    expect(pdf).not.toMatch(/\/BaseFont \/Helvetica/);
+    expect(pdf).toMatch(/\/FontFile2 \d+ 0 R/);
+    expect(pdf).toMatch(/\/OutputIntents \[/);
+    expect(pdf).toContain('/S /GTS_PDFA1');
+    expect(pdf).toContain('<pdfaid:part>3</pdfaid:part>');
+    expect(pdf).toContain('<pdfaid:conformance>B</pdfaid:conformance>');
+    expect(pdf).toContain('<xmp:CreateDate>2026-11-12T09:41:00Z</xmp:CreateDate>');
+    expect(pdf).toContain('/CreationDate (D:20261112094100Z)');
+    expect(pdf).toMatch(/\/ID \[ <[0-9a-f]{32}> <[0-9a-f]{32}> \]/i);
+    // le flux de métadonnées n'est pas compressé
+    expect(pdf).toMatch(/\/Type \/Metadata\s*\/Subtype \/XML\s*\/Length \d+\s*>>/);
+  });
+
+  it('photos en annexe, horodatage serveur, et toujours déterministe', async () => {
+    const jpeg = await sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 120, g: 160, b: 200 } } }).jpeg().toBuffer();
+    const a = await bl([{ jpeg, legende: 'Réserve · Bureau' }, { jpeg, legende: 'Livraison' }, { jpeg, legende: 'Dépôt' }]);
+    const b = await bl([{ jpeg, legende: 'Réserve · Bureau' }, { jpeg, legende: 'Livraison' }, { jpeg, legende: 'Dépôt' }]);
+    expect(a.equals(b)).toBe(true);
+    const s = a.toString('latin1');
+    expect((s.match(/\/Subtype \/Image/g) ?? []).length).toBe(3);
+    expect((s.match(/\/Type \/Page\b/g) ?? []).length).toBe(3);
   });
 });

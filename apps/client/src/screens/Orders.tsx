@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, get, getSession, listen, post } from '../lib/api';
 import { href } from '../lib/router';
-import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
+import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type CollectionPhoto, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
+import { shrinkPhoto } from '../lib/photos';
 import { Banner, Pills, StatusPill, type Tone } from '../components/ui';
 
 const DONE = ['LIVREE', 'LIVREE_AVEC_RESERVES', 'RETIREE', 'STOCKEE', 'CLOTUREE', 'ANNULEE', 'REFUSEE'];
@@ -194,16 +195,19 @@ export function OrderView({ id, role }: { id: string; role: string }) {
       <div className="order-detail">
         <section>
           <h2>Biens</h2>
+          {o.type === 'COLLECTE' && o.descriptionCollecte && <p className="collect-desc">{o.descriptionCollecte}</p>}
+          {o.type === 'COLLECTE' && o.volumeEstimeM3 ? <p className="hint small">Volume estimé : {o.volumeEstimeM3.toLocaleString('fr-FR')} m³</p> : null}
           <ul className="line-list">
             {o.lignes.map((l) => (
               <li key={l.id}>
-                {l.articleId ? <a href={href({ name: 'article', id: l.articleId })}>{l.libelle}</a> : <span>{l.descriptionLibre}</span>}
+                {l.articleId ? <a href={href({ name: 'article', id: l.articleId })}>{l.libelle}</a> : <span>{l.quantite && l.quantite > 1 ? `${l.quantite} × ` : ''}{l.descriptionLibre}</span>}
                 <small className="hint">
                   {l.statutLigne === 'MANQUANTE' ? (o.type === 'COLLECTE' ? 'Introuvable sur place' : 'Introuvable au dépôt') : l.statutLigne === 'REFUSEE' ? 'Refusé à la livraison' : ''}
                 </small>
               </li>
             ))}
           </ul>
+          {o.type === 'COLLECTE' && <CollectionPhotos orderId={o.id} open={['EN_ATTENTE_VALIDATION', 'SOUMISE', 'PLANIFIEE'].includes(o.statut) && o.demandeurId === getSession()?.user?.id} />}
         </section>
         <section className="facts">
           <h2>Détails</h2>
@@ -439,5 +443,55 @@ function DisputeForm({ orderId, articles, onDone, onCancel }: { orderId: string;
         </button>
       </div>
     </form>
+  );
+}
+
+/** CMD-06 : photos jointes à la demande de collecte ; le demandeur peut en ajouter tant que le chauffeur n'est pas passé. */
+function CollectionPhotos({ orderId, open }: { orderId: string; open: boolean }) {
+  const [photos, setPhotos] = useState<CollectionPhoto[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = () => get<CollectionPhoto[]>(`/collections/${orderId}/photos`).then(setPhotos, () => setPhotos([]));
+  useEffect(() => {
+    void load();
+  }, [orderId]);
+  const add = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      for (const f of Array.from(files).slice(0, Math.max(0, 10 - (photos?.length ?? 0)))) {
+        const blob = await shrinkPhoto(f);
+        await api(`/collections/${orderId}/photos/${crypto.randomUUID()}`, { method: 'PUT', body: blob, headers: { 'Content-Type': blob.type || f.type } });
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    await load();
+    setBusy(false);
+  };
+  if (!photos || (!photos.length && !open)) return null;
+  return (
+    <div className="photo-field">
+      <h3>Photos jointes{photos.length ? ` (${photos.length})` : ''}</h3>
+      {photos.length > 0 && (
+        <ul className="photo-previews">
+          {photos.map((p, i) => (
+            <li key={p.id}>
+              <a href={p.originale} target="_blank" rel="noreferrer">
+                <img src={p.vignette} alt={`Photo ${i + 1} de la collecte`} loading="lazy" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <Banner kind="error">{error}</Banner>}
+      {open && photos.length < 10 && (
+        <label className="btn secondary file-btn">
+          {busy ? 'Envoi…' : photos.length ? 'Ajouter des photos' : 'Joindre des photos'}
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/*" multiple disabled={busy} onChange={(e) => (void add(e.target.files), (e.target.value = ''))} />
+        </label>
+      )}
+    </div>
   );
 }

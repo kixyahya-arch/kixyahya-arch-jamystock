@@ -10,6 +10,7 @@ export type Route =
   | { name: 'collecte' }
   | { name: 'sites' }
   | { name: 'documents' }
+  | { name: 'dormants' }
   | { name: 'compte' }
   | { name: 'utilisateurs' }
   | { name: 'invitation'; token: string }
@@ -30,6 +31,7 @@ export function parse(hash: string): Route {
   if (a === 'collecte') return { name: 'collecte' };
   if (a === 'sites') return { name: 'sites' };
   if (a === 'documents') return { name: 'documents' };
+  if (a === 'dormants') return { name: 'dormants' };
   return { name: 'inventaire' };
 }
 

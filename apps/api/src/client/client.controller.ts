@@ -1,5 +1,6 @@
-import { Controller, Get, Inject } from '@nestjs/common';
-import { computeClientSurface, gaugeLevel, isClientRole, type SurfaceItem } from '@jamystock/domain';
+import { Body, Controller, Get, HttpCode, Inject, Post, Query } from '@nestjs/common';
+import { z } from 'zod';
+import { computeClientSurface, dormantSince, floorFromVolume, forecastCollection, gaugeLevel, isClientRole, type SurfaceItem } from '@jamystock/domain';
 import { DATABASE } from '../common/tokens.js';
 import type { Database, Tx } from '../db/database.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
@@ -7,6 +8,8 @@ import type { AuthUser } from '../auth/auth.service.js';
 import { ctxOf } from '../common/context.js';
 import { forbidden } from '../common/errors.js';
 import { FilesService } from '../files/files.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { AuditService } from '../audit/audit.service.js';
 
 /** Statuts où le bien occupe physiquement une place au dépôt (et compte donc dans la surface). */
 const PRESENT = `('EN_STOCK','RESERVE','EN_PREPARATION')`;
@@ -21,6 +24,7 @@ export class ClientController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(FilesService) private readonly files: FilesService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   private clientOnly(user: AuthUser) {
@@ -117,6 +121,83 @@ export class ClientController {
         out.push({ mois, moyenne: row?.moyenne ?? null, pic: row?.pic ?? null });
       }
       return out;
+    });
+  }
+
+  /**
+   * RG-AL-03 : avertissement dans le tunnel de collecte. Surface du moment + collectes déjà demandées et pas encore
+   * rangées + surface de la collecte en préparation (emprise donnée par l'assistant, ou volume ÷ hauteur utile).
+   * Calculé sur toute l'entreprise ; un B2B Utilisateur n'en voit que la conclusion, pas les chiffres du compte.
+   */
+  @Get('collecte/prevision')
+  @RequirePermission('collection.request')
+  forecast(@CurrentUser() user: AuthUser, @Query() query: unknown) {
+    this.clientOnly(user);
+    const q = z.object({ m2: z.coerce.number().min(0).max(100000).optional(), volume: z.coerce.number().min(0).max(100000).optional() }).parse(query);
+    return this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, async (tx) => {
+      const surface = await liveSurface(tx, user.entrepriseId!, true);
+      if (!surface.m2Inclus) return { forfait: false, depasse: false, niveau: null };
+      const pending = await tx.query<{ v: number | null }>(
+        `SELECT volume_m3::float AS v FROM commande
+          WHERE entreprise_id = $1 AND type = 'COLLECTE' AND coalesce(nature_collecte, 'NOUVEAUX') IN ('NOUVEAUX','RETOUR')
+            AND statut IN ('EN_ATTENTE_VALIDATION','SOUMISE','PLANIFIEE','COLLECTEE')`,
+        [user.entrepriseId],
+      );
+      const f = forecastCollection({
+        occupiedM2: surface.m2Occupes,
+        pendingM2: pending.rows.reduce((t, r) => t + floorFromVolume(r.v ?? 0), 0),
+        addedM2: q.m2 ?? floorFromVolume(q.volume ?? 0),
+        includedM2: surface.m2Inclus,
+      });
+      return user.role === 'B2B_USER' ? { forfait: true, depasse: f.depasse, niveau: f.niveau } : { forfait: true, ...f };
+    });
+  }
+
+  /** RG-AL-02 : « Passer au forfait supérieur » : la demande part à l'exploitant (e-mail aux Super Admin, trace d'audit). */
+  @Post('forfait/demande')
+  @HttpCode(200)
+  @RequirePermission('inventory.read')
+  async upgrade(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    this.clientOnly(user);
+    if (user.role === 'B2B_USER') throw forbidden('Le forfait est géré par les administrateurs du compte');
+    const b = z.object({ m2Souhaites: z.number().positive().max(100000).optional(), message: z.string().max(1000).optional() }).parse(body ?? {});
+    return this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, async (tx) => {
+      const surface = await liveSurface(tx, user.entrepriseId!, true);
+      const who = (await tx.query<{ nom: string; entreprise: string }>(`SELECT u.nom, e.nom AS entreprise FROM utilisateur u JOIN entreprise e ON e.id = u.entreprise_id WHERE u.id = $1`, [user.id])).rows[0]!;
+      const staff = await tx.query<{ id: string }>(`SELECT id FROM utilisateur WHERE role = 'SUPER_ADMIN' AND statut = 'ACTIF'`);
+      const vars = { entreprise: who.entreprise, demandeur: who.nom, m2Occupes: surface.m2Occupes, m2Inclus: surface.m2Inclus, m2Souhaites: b.m2Souhaites ?? null, message: b.message?.trim() || null };
+      for (const s of staff.rows) await NotificationsService.enqueue(tx, user.tenantId, { modele: 'DEMANDE_FORFAIT', destinataireId: s.id, variables: vars });
+      await this.audit.record(tx, user, { action: 'DEMANDE_FORFAIT', objet: 'forfait', entrepriseId: user.entrepriseId, apres: vars });
+      return { envoyee: true };
+    });
+  }
+
+  /**
+   * RG-AL-05 : biens dormants, au dépôt sans aucun mouvement depuis 12 mois (date d'entrée à défaut), du plus ancien
+   * au plus récent, avec la surface qu'ils occupent. Un B2B Utilisateur ne voit que ceux de ses projets (RLS).
+   */
+  @Get('dormants')
+  @RequirePermission('inventory.read')
+  dormants(@CurrentUser() user: AuthUser) {
+    this.clientOnly(user);
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const r = await tx.query<{ id: string; libelle: string; qr: string; projetId: string | null; projet: string | null; depuis: string; m2: number | null; photo: string | null; reserve: boolean }>(
+        `SELECT a.id, a.libelle, a.qr_code AS qr, a.projet_id AS "projetId", p.nom AS projet, coalesce(a.dernier_mouvement_le, a.date_entree, a.created_at) AS depuis,
+                CASE WHEN coalesce(a.longueur_m, 0) > 0 AND coalesce(a.largeur_m, 0) > 0 THEN round((a.longueur_m * a.largeur_m)::numeric, 2)::float END AS m2,
+                (a.statut = 'RESERVE') AS reserve,
+                (SELECT ph.id FROM photo ph WHERE ph.article_id = a.id AND ph.televersee ORDER BY ph.prise_le LIMIT 1) AS photo
+           FROM article a LEFT JOIN projet p ON p.id = a.projet_id
+          WHERE a.entreprise_id = $1 AND a.statut IN ('EN_STOCK','RESERVE') AND coalesce(a.dernier_mouvement_le, a.date_entree, a.created_at) < $2
+          ORDER BY 6, a.libelle LIMIT 2000`,
+        [user.entrepriseId, dormantSince(new Date())],
+      );
+      return {
+        depuisMois: 12,
+        total: r.rows.length,
+        m2: Math.round(r.rows.reduce((t, a) => t + (a.m2 ?? 0), 0) * 10) / 10,
+        sansDimensions: r.rows.filter((a) => a.m2 === null).length,
+        items: r.rows.map(({ photo, ...a }) => ({ ...a, vignette: photo ? this.files.photoUrl(user.tenantId, photo, 't') : null })),
+      };
     });
   }
 }

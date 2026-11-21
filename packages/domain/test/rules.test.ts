@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyMovement,
+  dormantReportQuarter,
+  dormantSince,
+  floorFromVolume,
+  forecastCollection,
   assertCanStore,
   assertTransition,
   canTransition,
@@ -179,5 +183,25 @@ describe('contrat de synchronisation terrain', () => {
     expect(sortByPath([{ chemin: 'N > B > Allée 10' }, { chemin: null }, { chemin: 'N > B > Allée 4' }]).map((x) => x.chemin)).toEqual([
       'N > B > Allée 4', 'N > B > Allée 10', null,
     ]);
+  });
+});
+
+describe('prévision de collecte et biens dormants (RG-AL-03, RG-AL-05)', () => {
+  it('passe d’un volume à une surface au sol avec la hauteur utile retenue', () => {
+    expect(floorFromVolume(12)).toBe(10);
+    expect(floorFromVolume(0)).toBe(0);
+    expect(floorFromVolume(-3)).toBe(0);
+  });
+
+  it('prévoit la surface après la collecte, collectes déjà demandées comprises', () => {
+    expect(forecastCollection({ occupiedM2: 100, pendingM2: 5, addedM2: 10, includedM2: 120 })).toMatchObject({ m2Prevus: 115, depasse: false, niveau: 'ATTENTION' });
+    expect(forecastCollection({ occupiedM2: 100, pendingM2: 5, addedM2: 20, includedM2: 120 })).toMatchObject({ m2Prevus: 125, depasse: true, m2Depassement: 5, niveau: 'DEPASSEMENT' });
+    expect(forecastCollection({ occupiedM2: 10, pendingM2: 0, addedM2: 5, includedM2: 0 }).depasse).toBe(false);
+  });
+
+  it('date les biens dormants et le trimestre du rapport à l’heure de Paris', () => {
+    expect(dormantSince(new Date('2026-11-21T10:00:00Z')).toISOString()).toBe('2025-11-21T10:00:00.000Z');
+    expect(dormantReportQuarter(new Date('2026-12-31T23:30:00Z'))).toBe('2027-T1');
+    expect(dormantReportQuarter(new Date('2026-05-02T10:00:00Z'))).toBe('2026-T2');
   });
 });

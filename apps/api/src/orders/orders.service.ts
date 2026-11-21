@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   assertTransition,
   earliestDeliveryDate,
+  floorFromVolume,
+  forecastCollection,
   formatDocumentNumber,
   isClientEditable,
   isClientRole,
@@ -20,6 +22,8 @@ import { AuditService } from '../audit/audit.service.js';
 import { ctxOf } from '../common/context.js';
 import { blockingInvoices } from '../billing/dunning.service.js';
 import { conflict, forbidden, notFound, unprocessable } from '../common/errors.js';
+import { liveSurface } from '../client/client.controller.js';
+import { AlertsService } from '../alerts/alerts.service.js';
 
 export interface OrderRow {
   id: string;
@@ -299,6 +303,35 @@ export class OrdersService {
 
   /** CMD-06 : demande de collecte (mise en stock). */
   async requestCollection(user: AuthUser, input: CollectionInput, now = new Date()) {
+    const order = await this.createCollection(user, input, now);
+    // RG-AL-03 : une collecte demandée par un utilisateur qui fera dépasser le forfait prévient ses administrateurs
+    if (user.role === 'B2B_USER' && (input.nature ?? 'NOUVEAUX') !== 'TRANSFERT') {
+      await this.forecastAlert(user, order as { id: string; numero: string | null; projetId: string | null }).catch((e) => console.error('Prévision de surface :', (e as Error).message));
+    }
+    return order;
+  }
+
+  private async forecastAlert(user: AuthUser, order: { id: string; numero: string | null; projetId: string | null }) {
+    await this.db.tx({ tenantId: user.tenantId, role: 'SYSTEM' }, async (tx) => {
+      const surface = await liveSurface(tx, user.entrepriseId!, true);
+      if (!surface.m2Inclus) return;
+      const pending = await tx.query<{ v: number | null }>(
+        `SELECT volume_m3::float AS v FROM commande
+          WHERE entreprise_id = $1 AND type = 'COLLECTE' AND coalesce(nature_collecte, 'NOUVEAUX') IN ('NOUVEAUX','RETOUR')
+            AND statut IN ('EN_ATTENTE_VALIDATION','SOUMISE','PLANIFIEE','COLLECTEE')`,
+        [user.entrepriseId],
+      );
+      const f = forecastCollection({ occupiedM2: surface.m2Occupes, pendingM2: pending.rows.reduce((t, r) => t + floorFromVolume(r.v ?? 0), 0), addedM2: 0, includedM2: surface.m2Inclus });
+      if (!f.depasse) return;
+      const who = (await tx.query<{ nom: string }>('SELECT nom FROM utilisateur WHERE id = $1', [user.id])).rows[0];
+      const projet = order.projetId ? (await tx.query<{ nom: string }>('SELECT nom FROM projet WHERE id = $1', [order.projetId])).rows[0]?.nom : null;
+      await AlertsService.notifyForecast(tx, user.tenantId, user.entrepriseId!, user.id, {
+        numero: order.numero, commandeId: order.id, demandeur: who?.nom ?? null, projet: projet ?? null, m2Prevus: f.m2Prevus, m2Inclus: f.m2Inclus, m2Depassement: f.m2Depassement,
+      });
+    });
+  }
+
+  private async createCollection(user: AuthUser, input: CollectionInput, now: Date) {
     this.assertClient(user);
     return this.db.tx(ctxOf(user), async (tx) => {
       if (user.role === 'B2B_USER') {
@@ -606,7 +639,7 @@ export class OrdersService {
 
   private async present(tx: Tx, order: OrderRow) {
     const lignes = await tx.query<{ longueur_m: number | null; largeur_m: number | null; hauteur_m: number | null }>(
-      `SELECT l.id, l.article_id AS "articleId", l.description_libre AS "descriptionLibre", l.statut_ligne AS "statutLigne",
+      `SELECT l.id, l.article_id AS "articleId", l.description_libre AS "descriptionLibre", l.quantite_estimee AS "quantite", l.statut_ligne AS "statutLigne",
               a.libelle, a.qr_code AS "qrCode", a.longueur_m, a.largeur_m, a.hauteur_m,
               (a.id IS NULL OR a.statut = 'EN_STOCK' OR c.statut <> 'BROUILLON') AS disponible,
               -- CMD-09 : article rangé sur une UM, avec le nombre de biens de cette UM
@@ -639,6 +672,9 @@ export class OrdersService {
       natureCollecte: c.nature_collecte,
       destination: c.destination,
       destinationProjetId: c.destination_projet_id,
+      descriptionCollecte: c.description_collecte ?? null,
+      volumeEstimeM3: c.type === 'COLLECTE' && c.volume_m3 != null ? Number(c.volume_m3) : null,
+      demandeurId: c.demandeur_id,
       historique: c.historique_statuts,
       nbArticles: lignes.rows.length,
       volumeM3: vol,

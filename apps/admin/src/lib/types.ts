@@ -81,6 +81,8 @@ export interface OrderDetail extends Omit<OrderRow, 'urgent' | 'missionsAAffecte
   poidsKg: number | null;
   vehiculeSuggere: string | null;
   descriptionCollecte: string | null;
+  /** CMD-06 : photos prises par le client en demandant la collecte */
+  photosCollecte?: { id: string; vignette: string; moyenne: string; originale: string }[];
   depotSansSignature?: boolean;
   natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
   destination?: { libelle?: string } | null;
