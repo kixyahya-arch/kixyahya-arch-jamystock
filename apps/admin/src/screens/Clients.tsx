@@ -4,6 +4,7 @@ import { go, href } from '../lib/router';
 import type { ClientDetail, ClientRow } from '../lib/types';
 import { ROLE, USER_STATUS, dateFr, euros } from '../lib/labels';
 import { Banner, Pills, StatusPill } from '../components/ui';
+import { ClientPacks } from './ClientPacks';
 
 const m2 = (n: number | null | undefined) => (n ?? 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
@@ -226,6 +227,8 @@ export function ClientView({ id }: { id: string }) {
               )}
             </section>
           )}
+
+          <ClientPacks clientId={c.id} projets={c.projets} canEdit={canEdit} />
 
           <section className="panel">
             <h2>Utilisateurs</h2>

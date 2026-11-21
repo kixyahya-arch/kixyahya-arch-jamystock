@@ -37,7 +37,9 @@ import { PaymentsService } from './payments/payments.service.js';
 import { DunningService } from './billing/dunning.service.js';
 import { SupportController } from './support/support.controller.js';
 import { ArticleClientController, ClientInventoryController, InventoryExportService } from './inventory/client-inventory.controller.js';
-import { BoDisputesController, CartTemplatesController, DisputesController } from './orders/after-sales.controller.js';
+import { BoDisputesController, DisputesController } from './orders/after-sales.controller.js';
+import { BoPacksController, CartTemplatesController, PacksService } from './orders/packs.controller.js';
+import { ActivitiesController, TransfersController } from './orders/transfers.controller.js';
 import { PilotageController } from './pilotage/pilotage.controller.js';
 
 import { ToursController, FleetMapController } from './flux/tours.controller.js';
@@ -55,7 +57,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController, OrderEventsController, CollectionPhotosController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, BoPacksController, TransfersController, ActivitiesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController, OrderEventsController, CollectionPhotosController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },
@@ -68,6 +70,7 @@ export class AppModule {
         StorageService,
         FilesService,
         BillingService,
+        PacksService,
         BillingScheduler,
         NotificationsService,
         PaymentsService,

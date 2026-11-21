@@ -8,6 +8,8 @@ import { Inventory } from './screens/Inventory';
 import { ArticleView } from './screens/ArticleView';
 import { CartView } from './screens/CartView';
 import { OrderView, Orders } from './screens/Orders';
+import { PackView, Packs } from './screens/Packs';
+import { Activities } from './screens/Activities';
 import { Dormants } from './screens/Dormants';
 import { Collection } from './screens/Collection';
 import { OnSite } from './screens/OnSite';
@@ -85,6 +87,12 @@ export function App() {
         <OnSite ctx={ctx} role={role} />
       ) : route.name === 'dormants' ? (
         <Dormants />
+      ) : route.name === 'packs' ? (
+        <Packs ctx={ctx} role={role} />
+      ) : route.name === 'pack' ? (
+        <PackView key={route.id} id={route.id} />
+      ) : route.name === 'activites' ? (
+        <Activities />
       ) : route.name === 'documents' ? (
         <Documents key={window.location.hash} ctx={ctx} role={role} />
       ) : route.name === 'compte' ? (

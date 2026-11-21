@@ -134,6 +134,11 @@ export interface OrderSummary {
   dateConfirmee: string | null;
   creeLe: string;
   nbArticles: number;
+  creneauConfirme?: string | null;
+  natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT' | null;
+  adresse?: string | null;
+  destination?: string | null;
+  destinationProjetId?: string | null;
 }
 
 export interface Cart extends Partial<Order> {
@@ -260,6 +265,53 @@ export interface CartTemplate {
   nbArticles: number;
   nbDisponibles: number;
   supprimable: boolean;
+  description?: string | null;
+  /** nombre de pièces renseignées */
+  pieces?: number;
+  vignettes?: string[];
+}
+
+export interface PackArticle {
+  id: string;
+  libelle: string;
+  qr: string | null;
+  statut: string | null;
+  projet: string | null;
+  dimensions: string | null;
+  piece: string | null;
+  indisponible: string | null;
+  vignette: string | null;
+  photo: string | null;
+}
+
+export interface PackDetail {
+  id: string;
+  nom: string;
+  description: string | null;
+  client: string | null;
+  projetId: string | null;
+  projet: string | null;
+  auteur: string | null;
+  creeLe: string;
+  modifieLe: string | null;
+  modifiable: boolean;
+  nbArticles: number;
+  nbDisponibles: number;
+  pieces: { piece: string | null; articles: PackArticle[] }[];
+  articles: PackArticle[];
+}
+
+export interface Activity {
+  id: string;
+  genre: 'MOUVEMENT' | 'DEMANDE' | 'DOCUMENT';
+  le: string;
+  titre: string;
+  texte: string | null;
+  article: { id: string; libelle: string; qr: string } | null;
+  commande: { id: string; numero: string | null } | null;
+  document: { id: string; numero: string } | null;
+  projet: string | null;
+  vignette: string | null;
 }
 
 export interface PhotoLinks {

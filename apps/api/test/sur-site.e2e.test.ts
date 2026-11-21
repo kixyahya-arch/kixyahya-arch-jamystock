@@ -218,6 +218,27 @@ describe('objets installés chez le client', () => {
     const mv = await sys<{ types: string }>(`SELECT string_agg(type::text, ',' ORDER BY horodatage_terminal) AS types FROM mouvement WHERE article_id = $1`, [canape.id]);
     expect(mv.rows[0]!.types).toBe('RECEPTION,LIVRAISON,CHARGEMENT,LIVRAISON');
     expect((await client.get(`/orders/${res.body.id}`)).body.statut).toBe('LIVREE');
+
+    // bon de transfert en PDF (date, départ, arrivée, biens), pour le client comme pour le Back-Office
+    const slip = await client.get(`/orders/${res.body.id}/bon-transfert.pdf`).buffer(true).parse((r, cb) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(slip.status).toBe(200);
+    expect(slip.headers['content-type']).toBe('application/pdf');
+    const pdf = slip.body as Buffer;
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.toString('latin1')).toContain('<pdfaid:part>3</pdfaid:part>');
+    expect(pdf.toString('latin1')).toContain(`Bon de transfert ${res.body.numero}`);
+    expect((await admin.get(`/orders/${res.body.id}/bon-transfert.pdf`)).status).toBe(200);
+    // la liste des demandes dit qu'il s'agit d'un transfert, et vers où
+    const list = (await client.get('/orders')).body.find((o: { id: string }) => o.id === res.body.id);
+    expect(list).toMatchObject({ natureCollecte: 'TRANSFERT', destination: '5 rue des Jardins, 92170 Vanves', destinationProjetId: t.data.projets.jardins });
+    // un autre client ne le voit pas ; une collecte ordinaire n'a pas de bon de transfert
+    expect((await (await as(t.data.users.otherB2bAdmin.email)).get(`/orders/${res.body.id}/bon-transfert.pdf`)).status).toBe(404);
+    const ordinaire = await client.post('/collections', { adresse: { libelle: '3 rue Neuve, 75011 Paris' }, dateSouhaitee: '2027-02-01', description: 'Deux cartons' });
+    expect((await client.get(`/orders/${ordinaire.body.id}/bon-transfert.pdf`)).status).toBe(422);
   });
 
   it('un transfert refuse un objet qui n’était pas demandé', async () => {

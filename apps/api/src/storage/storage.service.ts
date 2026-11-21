@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CONFIG } from '../common/tokens.js';
 import type { AppConfig } from '../config.js';
@@ -27,5 +27,10 @@ export class StorageService {
 
   async get(key: string): Promise<Buffer> {
     return readFile(this.resolve(key));
+  }
+
+  /** Supprime un fichier ; un fichier déjà absent n'est pas une erreur. */
+  async remove(key: string): Promise<void> {
+    await rm(this.resolve(key), { force: true });
   }
 }

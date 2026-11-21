@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { get, post } from '../lib/api';
+import { del, get, post } from '../lib/api';
 import { href } from '../lib/router';
 import { ARTICLE_STATUS, CONDITION, MOVE_TYPE, dateFr, timeFr } from '../lib/labels';
 import { Banner, Pills, StatusPill } from '../components/ui';
 import { LabelsPanel } from './Warehouse';
+
+const PHOTO_CONTEXT: Record<string, string> = {
+  RECEPTION: 'Réception',
+  LIVRAISON: 'Livraison',
+  RESERVE: 'Réserve',
+  A_LA_DEMANDE: 'À la demande du client',
+  ENLEVEMENT: 'Enlèvement',
+  ANOMALIE: 'Anomalie',
+  DEPOT: 'Dépôt sans signature',
+};
 
 /** WMS-06 : consulter et corriger le stock. Chaque correction crée un mouvement « Ajustement » motivé, visible dans l'audit. */
 
@@ -28,6 +38,7 @@ interface Fiche {
   umQr: string | null;
   umType: string | null;
   umArticles: number;
+  photos: { id: string; contexte: string; priseLe: string; supprimable: boolean; vignette: string; moyenne: string; originale: string }[];
   mouvements: { id: string; type: string; le: string; de: string | null; vers: string | null; statutAvant: string | null; statutApres: string | null; motif: string | null; auteur: string | null }[];
 }
 
@@ -124,6 +135,52 @@ export function StockArticle({ id }: { id: string }) {
               )}
             </dl>
             {f.description && <p className="muted small">{f.description}</p>}
+          </section>
+          <section className="panel">
+            <h2>Photos ({f.photos.length})</h2>
+            {f.photos.length === 0 ? (
+              <p className="hint">Aucune photo : la prochaine prise à l’app terrain apparaîtra ici et dans l’Espace Client.</p>
+            ) : (
+              <ul className="photo-manage">
+                {f.photos.map((p) => (
+                  <li key={p.id}>
+                    <a href={p.originale} target="_blank" rel="noreferrer" title="Ouvrir en haute définition">
+                      <img src={p.vignette} alt={`Photo du ${dateFr(p.priseLe)}`} loading="lazy" />
+                    </a>
+                    <span className="muted small">
+                      {PHOTO_CONTEXT[p.contexte] ?? p.contexte} · {dateFr(p.priseLe)}
+                    </span>
+                    {p.supprimable ? (
+                      <button
+                        type="button"
+                        className="link danger"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (!window.confirm('Supprimer cette photo ? Elle disparaît aussi de l’Espace Client. Cette action est définitive.')) return;
+                          setBusy(true);
+                          try {
+                            await del(`/bo/warehouse/articles/${f.id}/photos/${p.id}`);
+                            setNotice('Photo supprimée, et tracée dans le journal d’audit.');
+                            setError(null);
+                            void load();
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Supprimer
+                      </button>
+                    ) : (
+                      <span className="muted small" title="Rattachée à un bon de livraison ou à une réserve">
+                        Preuve, conservée
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
           <section className="panel">
             <h2>Historique des mouvements</h2>

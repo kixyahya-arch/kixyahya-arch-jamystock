@@ -9,9 +9,11 @@ export function Shell({ session, route, onLogout, children }: { session: Session
   const nav: { r: Route; label: string; active: boolean }[] = [
     { r: { name: 'inventaire' }, label: 'Mon stock', active: route.name === 'inventaire' || route.name === 'article' },
     { r: { name: 'sites' }, label: 'Sur mes sites', active: route.name === 'sites' },
+    { r: { name: 'packs' }, label: 'Packs', active: route.name === 'packs' || route.name === 'pack' },
     { r: { name: 'commandes' }, label: 'Commandes', active: route.name === 'commandes' || route.name === 'commande' },
     { r: { name: 'collecte' }, label: 'Demander une collecte', active: route.name === 'collecte' },
     { r: { name: 'documents' }, label: 'Documents', active: route.name === 'documents' },
+    { r: { name: 'activites' }, label: 'Activités', active: route.name === 'activites' },
     ...(session.user?.role === 'B2B_ADMIN' ? [{ r: { name: 'utilisateurs' } as Route, label: 'Utilisateurs', active: route.name === 'utilisateurs' }] : []),
   ];
   const support = session.support ? session.user?.support : null;
@@ -66,9 +68,11 @@ export function Shell({ session, route, onLogout, children }: { session: Session
               <h4>Mon espace</h4>
               <a href={href({ name: 'inventaire' })}>Mon stock</a>
               <a href={href({ name: 'sites' })}>Sur mes sites</a>
+              <a href={href({ name: 'packs' })}>Packs</a>
               <a href={href({ name: 'commandes' })}>Commandes</a>
               <a href={href({ name: 'collecte' })}>Collecte</a>
               <a href={href({ name: 'documents' })}>Documents</a>
+              <a href={href({ name: 'activites' })}>Activités</a>
               <a href={href({ name: 'dormants' })}>Biens dormants</a>
               <a href={href({ name: 'compte' })}>Mon compte</a>
             </div>
