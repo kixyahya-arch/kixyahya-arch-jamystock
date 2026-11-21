@@ -1,3 +1,5 @@
+import { CollectionPhotosController } from './orders/collection-photos.controller.js';
+import { AlertsService } from './alerts/alerts.service.js';
 import { Module, type DynamicModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { CONFIG, DATABASE } from './common/tokens.js';
@@ -53,7 +55,7 @@ export class AppModule {
   static forRoot(config: AppConfig, db?: Database): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController, OrderEventsController],
+      controllers: [HealthController, AuthController, InventoryController, OrdersController, FieldController, MissionsController, LabelsController, FilesController, ClientController, BackofficeController, BillingController, DocumentsController, WarehouseController, AccountsController, NotificationsController, PaymentsController, SupportController, PilotageController, ClientInventoryController, ArticleClientController, CartTemplatesController, DisputesController, BoDisputesController, WarehousePlanController, InventoryCountController, ToursController, FleetMapController, PublicTrackingController, EmailTemplatesController, RepriseController, OrderEventsController, CollectionPhotosController],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DATABASE, useValue: db ?? new Database(config.appDatabaseUrl) },
@@ -61,6 +63,7 @@ export class AppModule {
         AuditService,
         OrdersService,
         OrderEventsService,
+        AlertsService,
         FieldService,
         StorageService,
         FilesService,

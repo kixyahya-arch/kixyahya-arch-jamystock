@@ -88,6 +88,18 @@ export function OrderView({ id }: { id: string }) {
                 {o.vehiculeSuggere ? ` · véhicule suggéré : ${o.vehiculeSuggere}` : ''}
               </p>
             )}
+            {(o.photosCollecte?.length ?? 0) > 0 && (
+              <>
+                <h3 className="sub">Photos du client ({o.photosCollecte!.length})</h3>
+                <div className="photo-strip">
+                  {o.photosCollecte!.map((p) => (
+                    <a key={p.id} href={p.originale} target="_blank" rel="noreferrer">
+                      <img src={p.vignette} alt="Photo jointe à la demande de collecte" loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           <section className="panel">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { get } from '../lib/api';
+import { get, post } from '../lib/api';
+import { href } from '../lib/router';
 import type { Surface, SurfaceMonth } from '../lib/types';
 
 const fmt = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -31,8 +32,8 @@ export function Gauge({ s }: { s: Surface }) {
             {s.niveau === 'DEPASSEMENT'
               ? `Forfait dépassé de ${fmt(s.m2Occupes - s.m2Inclus)} m² : le dépassement sera facturé au prorata.`
               : s.niveau === 'ATTENTION'
-                ? `Vous approchez de votre forfait (${s.taux} %).`
-                : `${s.taux} % de votre forfait utilisé.`}
+                ? `Vous approchez de votre forfait (${fmt(s.taux ?? 0)} %).`
+                : `${fmt(s.taux ?? 0)} % de votre forfait utilisé.`}
           </p>
         </>
       )}
@@ -72,7 +73,62 @@ export function Gauge({ s }: { s: Surface }) {
         </ul>
       )}
       <History inclus={s.m2Inclus} />
+      <div className="gauge-actions">
+        <a href={href({ name: 'dormants' })}>Biens sans mouvement depuis un an</a>
+        {s.perimetre === 'ENTREPRISE' && s.m2Inclus !== null && <Upgrade s={s} />}
+      </div>
     </section>
+  );
+}
+
+/** RG-AL-02 : « Passer au forfait supérieur » : la demande part à JAMYSTOCK, qui revient vers le client. */
+function Upgrade({ s }: { s: Surface }) {
+  const [open, setOpen] = useState(false);
+  const [m2, setM2] = useState('');
+  const [message, setMessage] = useState('');
+  const [state, setState] = useState<'idle' | 'busy' | 'sent' | 'error'>('idle');
+  if (state === 'sent') return <span className="hint">Demande envoyée : JAMYSTOCK revient vers vous avec une proposition.</span>;
+  if (!open)
+    return (
+      <button type="button" className="btn secondary small" onClick={() => setOpen(true)}>
+        Demander un forfait supérieur
+      </button>
+    );
+  const send = async () => {
+    setState('busy');
+    try {
+      await post('/me/forfait/demande', { ...(Number(m2) > 0 ? { m2Souhaites: Number(m2) } : {}), ...(message.trim() ? { message: message.trim() } : {}) });
+      setState('sent');
+    } catch {
+      setState('error');
+    }
+  };
+  return (
+    <form
+      className="upgrade-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      <label>
+        Surface souhaitée (m², facultatif)
+        <input type="number" min={1} step={1} value={m2} onChange={(e) => setM2(e.target.value)} placeholder={s.m2Inclus ? String(Math.ceil(s.m2Inclus * 1.25)) : ''} />
+      </label>
+      <label>
+        Message (facultatif)
+        <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex. : arrivée de 40 m² de mobilier en mars" />
+      </label>
+      {state === 'error' && <p className="hint error-text">Envoi impossible pour le moment, réessayez.</p>}
+      <div className="row-actions">
+        <button type="submit" className="btn primary small" disabled={state === 'busy'}>
+          {state === 'busy' ? 'Envoi…' : 'Envoyer la demande'}
+        </button>
+        <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+          Annuler
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -69,6 +69,7 @@ export function Shell({ session, route, onLogout, children }: { session: Session
               <a href={href({ name: 'commandes' })}>Commandes</a>
               <a href={href({ name: 'collecte' })}>Collecte</a>
               <a href={href({ name: 'documents' })}>Documents</a>
+              <a href={href({ name: 'dormants' })}>Biens dormants</a>
               <a href={href({ name: 'compte' })}>Mon compte</a>
             </div>
             <div>

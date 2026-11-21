@@ -84,6 +84,8 @@ export interface OrderLine {
   id: string;
   articleId: string | null;
   descriptionLibre: string | null;
+  /** quantité estimée d'une ligne libre de collecte (assistant CMD-06) */
+  quantite?: number | null;
   statutLigne: string;
   libelle: string | null;
   qrCode: string | null;
@@ -115,6 +117,10 @@ export interface Order {
   depotSansSignature?: boolean;
   natureCollecte?: 'NOUVEAUX' | 'RETOUR' | 'TRANSFERT';
   destination?: { libelle: string } | null;
+  /** CMD-06 : ce que le client a décrit et estimé en demandant la collecte */
+  descriptionCollecte?: string | null;
+  volumeEstimeM3?: number | null;
+  demandeurId?: string;
   lignes: OrderLine[];
 }
 
@@ -312,4 +318,34 @@ export interface ProjectCard {
   m2: number;
   derniereActivite: string | null;
   couverture: string | null;
+}
+
+/** CMD-06 : photo jointe à une demande de collecte. */
+export interface CollectionPhoto {
+  id: string;
+  vignette: string;
+  moyenne: string;
+  originale: string;
+}
+
+/** RG-AL-03 : surface prévue une fois la collecte rangée (chiffres réservés aux administrateurs du compte). */
+export interface CollectionForecast {
+  forfait: boolean;
+  depasse: boolean;
+  niveau: 'OK' | 'ATTENTION' | 'DEPASSEMENT' | null;
+  m2Occupes?: number;
+  m2EnCours?: number;
+  m2Ajoutes?: number;
+  m2Prevus?: number;
+  m2Inclus?: number;
+  m2Depassement?: number;
+}
+
+/** RG-AL-05 : biens au dépôt sans mouvement depuis 12 mois. */
+export interface DormantReport {
+  depuisMois: number;
+  total: number;
+  m2: number;
+  sansDimensions: number;
+  items: { id: string; libelle: string; qr: string; projetId: string | null; projet: string | null; depuis: string; m2: number | null; reserve: boolean; vignette: string | null }[];
 }

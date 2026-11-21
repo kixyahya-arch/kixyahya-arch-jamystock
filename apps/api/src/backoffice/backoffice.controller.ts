@@ -175,6 +175,8 @@ export class BackofficeController {
         ...c,
         lignes: lignes.rows.map(({ photoId, ...l }) => ({ ...l, vignette: photoId ? this.files.photoUrl(user.tenantId, photoId, 't') : null })),
         missions,
+        // CMD-06 : photos prises par le client en demandant la collecte
+        photosCollecte: c.type === 'COLLECTE' ? (await tx.query<{ id: string }>('SELECT id FROM photo WHERE commande_id = $1 AND televersee ORDER BY prise_le, id', [orderId])).rows.map((p) => ({ id: p.id, ...this.files.photoUrls(user.tenantId, p.id) })) : [],
       };
     });
   }

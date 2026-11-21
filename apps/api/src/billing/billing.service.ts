@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
@@ -665,6 +666,8 @@ export class BillingService {
     );
     const signeLe = new Date(bl.signe_le ?? bl.recu_le);
     const data = await blPdf({
+      recuLe: bl.recu_le ? new Date(bl.recu_le) : null,
+      photos: await this.blPhotos(bl.tenant_id, id),
       issuer: await this.issuer(tx),
       numero: bl.numero,
       type: bl.type,
@@ -690,4 +693,34 @@ export class BillingService {
     if (!bl.cle_pdf) await tx.query('UPDATE bon_de_livraison SET cle_pdf = $2, empreinte_pdf_sha256 = $3 WHERE id = $1 AND cle_pdf IS NULL', [id, key, sha256(data)]);
     return { name: `${bl.numero}.pdf`, data, date: signeLe };
   }
+
+  /**
+   * Photos du BL (réserves, dépôt, livraison) pour l'annexe : JPEG de 1 200 px au plus, 12 au plus. Lues en contexte
+   * système : la visibilité du BL a déjà été vérifiée, et une photo de dépôt n'est rattachée à aucun bien.
+   */
+  private async blPhotos(tenantId: string, blId: string): Promise<{ jpeg: Buffer; legende: string }[]> {
+    const rows = await this.db.tx({ tenantId, role: 'SYSTEM' }, (tx) => tx.query<{ cle: string; contexte: string; prise_le: Date; libelle: string | null }>(
+      `SELECT ph.cle_originale AS cle, ph.contexte, ph.prise_le, a.libelle FROM photo ph LEFT JOIN article a ON a.id = ph.article_id
+        WHERE ph.bl_id = $1 AND ph.televersee ORDER BY ph.prise_le, ph.id LIMIT 12`,
+      [blId],
+    ));
+    const CONTEXTE: Record<string, string> = { RESERVE: 'Réserve', DEPOT: 'Dépôt sans signature', LIVRAISON: 'Livraison', ENLEVEMENT: 'Enlèvement', ANOMALIE: 'Anomalie' };
+    const out: { jpeg: Buffer; legende: string }[] = [];
+    for (const r of rows.rows) {
+      try {
+        const jpeg = await sharp(await this.storage.get(r.cle), { failOn: 'none' })
+          .rotate()
+          .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+          .flatten({ background: '#ffffff' })
+          .jpeg({ quality: 78 })
+          .toBuffer();
+        const quand = new Date(r.prise_le).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' });
+        out.push({ jpeg, legende: `${CONTEXTE[r.contexte] ?? r.contexte}${r.libelle ? ` · ${r.libelle}` : ''} · ${quand}` });
+      } catch {
+        // photo absente du stockage ou illisible : ignorée
+      }
+    }
+    return out;
+  }
+
 }

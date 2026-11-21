@@ -6,6 +6,7 @@ import type { Database } from '../db/database.js';
 import { BillingService, systemCtx } from './billing.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { DunningService } from './dunning.service.js';
+import { AlertsService } from '../alerts/alerts.service.js';
 
 /**
  * Tâches de facturation (§6.1, FAC-02, FAC-03), vérifiées chaque minute :
@@ -13,7 +14,8 @@ import { DunningService } from './dunning.service.js';
  *  - brouillons du mois précédent le 1er à 2 h (une seule fois par mois, même après un redémarrage) ;
  *  - émission automatique des brouillons non bloqués à J+2 ;
  *  - prélèvement des factures émises quand le client a enregistré une carte ou un mandat SEPA ;
- *  - passage en retard des factures échues et relances à J+7, J+15, J+30 (FAC-05).
+ *  - passage en retard des factures échues et relances à J+7, J+15, J+30 (FAC-05) ;
+ *  - alertes de forfait (§6.2) et rapport trimestriel des biens dormants (RG-AL-05).
  * Chaque étape est idempotente : plusieurs instances ou un redémarrage ne créent pas de doublon.
  */
 @Injectable()
@@ -27,6 +29,7 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
     @Inject(BillingService) private readonly billing: BillingService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
     @Inject(DunningService) private readonly dunning: DunningService,
+    @Inject(AlertsService) private readonly alerts: AlertsService,
   ) {}
 
   onApplicationBootstrap() {
@@ -81,6 +84,11 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
       console.error('Relances :', (e as Error).message);
       return null;
     });
+    // §6.2 : alertes de forfait du jour et rapport trimestriel des biens dormants, une fois les instantanés faits
+    const alertes = await this.alerts.run(tenantId, at).catch((e) => {
+      console.error('Alertes de forfait :', (e as Error).message);
+      return null;
+    });
     // FLX-05 (RGPD) : les positions des chauffeurs ne sont gardées que 30 jours
     const positionsPurgees = await this.db
       .tx(systemCtx(tenantId), async (tx) => (await tx.query(`DELETE FROM position_chauffeur WHERE horodatage < $1::timestamptz - interval '30 days'`, [at])).rowCount ?? 0)
@@ -88,6 +96,6 @@ export class BillingScheduler implements OnApplicationBootstrap, OnApplicationSh
         console.error('Purge des positions :', (e as Error).message);
         return null;
       });
-    return { instantanes, brouillons, emises, prelevements, relances, positionsPurgees };
+    return { instantanes, brouillons, emises, prelevements, relances, alertes, positionsPurgees };
   }
 }

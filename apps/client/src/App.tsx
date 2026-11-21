@@ -8,6 +8,7 @@ import { Inventory } from './screens/Inventory';
 import { ArticleView } from './screens/ArticleView';
 import { CartView } from './screens/CartView';
 import { OrderView, Orders } from './screens/Orders';
+import { Dormants } from './screens/Dormants';
 import { Collection } from './screens/Collection';
 import { OnSite } from './screens/OnSite';
 import { Documents } from './screens/Documents';
@@ -82,6 +83,8 @@ export function App() {
         <Collection ctx={ctx} role={role} />
       ) : route.name === 'sites' ? (
         <OnSite ctx={ctx} role={role} />
+      ) : route.name === 'dormants' ? (
+        <Dormants />
       ) : route.name === 'documents' ? (
         <Documents key={window.location.hash} ctx={ctx} role={role} />
       ) : route.name === 'compte' ? (

@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { blFingerprint, uuidv7, type BlSignPayload, type FieldAction, type SyncResult } from '@jamystock/domain';
@@ -36,7 +37,8 @@ const ok = (r: SyncResult) => {
   return r.data as Record<string, unknown>;
 };
 
-const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]);
+// vraie image (lisible par sharp) : les photos du dépôt passent en annexe du BL
+const JPEG = await sharp({ create: { width: 32, height: 24, channels: 3, background: { r: 90, g: 120, b: 150 } } }).jpeg().toBuffer();
 const u = () => t.data.users;
 const qrOf = async (id: string) => (await sys<{ qr_code: string }>('SELECT qr_code FROM article WHERE id = $1', [id])).rows[0]!.qr_code;
 
@@ -187,8 +189,12 @@ describe('restitution partielle d’une palette, dépôt sans signature, puis li
     const admin = u().b2bAdmin.email;
     const docs = await get(admin, '/me/documents?type=BL');
     expect(docs.body.items.find((d: { id: string }) => d.id === blId)).toMatchObject({ nonSigne: true });
-    const pdf = await t.http().get(`/api/v1/me/documents/bl/${blId}/pdf`).set('Authorization', await auth(admin));
+    const pdf = await t.http().get(`/api/v1/me/documents/bl/${blId}/pdf`).set('Authorization', await auth(admin)).responseType('blob');
     expect(pdf.status).toBe(200);
+    // archivage PDF/A-3b, horodatage serveur et photos du dépôt en annexe (§4.3, §7.6)
+    const text = (pdf.body as Buffer).toString('latin1');
+    expect(text).toContain('<pdfaid:part>3</pdfaid:part>');
+    expect((text.match(/\/Subtype \/Image/g) ?? []).length).toBe(3);
     const d = await get(admin, `/me/disputes/delivery/${orderId}`);
     expect(d.body.livraison).toMatchObject({ nonSigne: true, lieuDepot: 'Dans le bungalow de chantier, porte de gauche', signalementPossible: true });
     expect(d.body.livraison.photos).toHaveLength(3);
