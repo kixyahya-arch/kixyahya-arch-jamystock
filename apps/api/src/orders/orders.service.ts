@@ -86,7 +86,8 @@ export class OrdersService {
     return this.db.tx(ctxOf(user), async (tx) => {
       const r = await tx.query(
         `SELECT c.id, c.numero, c.type, c.statut, c.projet_id AS "projetId", c.entreprise_id AS "entrepriseId",
-                c.date_souhaitee AS "dateSouhaitee", c.date_confirmee AS "dateConfirmee", c.created_at AS "creeLe",
+                c.date_souhaitee AS "dateSouhaitee", c.date_confirmee AS "dateConfirmee", c.creneau_confirme AS "creneauConfirme", c.created_at AS "creeLe",
+                c.nature_collecte AS "natureCollecte", c.adresse->>'libelle' AS adresse, c.destination->>'libelle' AS destination, c.destination_projet_id AS "destinationProjetId",
                 (SELECT count(*)::int FROM ligne_commande l WHERE l.commande_id = c.id) AS "nbArticles"
            FROM commande c
           WHERE c.statut <> 'BROUILLON' AND ($1::statut_commande IS NULL OR c.statut = $1) AND ($2::type_commande IS NULL OR c.type = $2)

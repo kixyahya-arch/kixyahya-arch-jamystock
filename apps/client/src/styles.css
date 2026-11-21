@@ -2281,3 +2281,222 @@ label.inline {
   margin: 22px 0 10px;
   font-size: 1rem;
 }
+
+/* --- Packs (compte rendu Adam) : ensembles de meubles par logement, pièce par pièce --- */
+.packs-actions {
+  margin: 0 0 20px;
+}
+.pack-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+}
+.pack-card {
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 10px 14px;
+  background: var(--surface);
+}
+.pack-card:hover {
+  border-color: var(--accent);
+}
+.pack-covers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  aspect-ratio: 4 / 3;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.pack-covers .thumbimg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+.pack-covers[data-n='0'] .thumbimg,
+.pack-covers[data-n='1'] .thumbimg {
+  grid-column: 1 / -1;
+  grid-row: 1 / span 2;
+}
+.pack-covers[data-n='2'] .thumbimg {
+  grid-row: 1 / span 2;
+}
+.pack-covers[data-n='3'] .thumbimg:first-child {
+  grid-row: 1 / span 2;
+}
+.ok-text {
+  color: var(--ok);
+}
+.warn-text {
+  color: var(--danger);
+}
+.pack-toolbar {
+  margin: 4px 0 24px;
+  flex-wrap: wrap;
+}
+.danger-link {
+  color: var(--danger);
+}
+.pack-room {
+  margin: 0 0 28px;
+}
+.pack-room h2 {
+  border-bottom: 2px solid var(--vert);
+  padding-bottom: 6px;
+}
+.pack-items {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.pack-items li {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.pack-items li.off .pack-photo {
+  opacity: 0.55;
+}
+.pack-photo .thumbimg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+.pack-item-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pack-item-body a {
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.pack-item-edit {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+.piece-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+}
+.pack-add {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 18px;
+}
+.pack-found {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.pack-found li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.pack-found .thumbimg {
+  width: 52px;
+  height: 52px;
+}
+.pack-found li > span {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pack-edit {
+  max-width: 560px;
+  margin: 8px 0;
+}
+.pack-ai {
+  margin-top: 24px;
+}
+
+/* --- Activités : fil daté, jour par jour --- */
+.activity-day h2::first-letter {
+  text-transform: uppercase;
+}
+.activity-day h2 {
+  font-size: 1rem;
+  margin: 24px 0 6px;
+  color: var(--muted);
+}
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.activity-list li {
+  display: grid;
+  grid-template-columns: 52px 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.activity-list .thumbimg,
+.activity-icon {
+  width: 48px;
+  height: 48px;
+}
+.activity-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-ink);
+  font-weight: 700;
+}
+.activity-list li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-time {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .activity-list li {
+    grid-template-columns: 44px 40px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .activity-list .thumbimg,
+  .activity-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .pack-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .pack-item-edit {
+    flex-wrap: wrap;
+  }
+  .piece-input {
+    flex-basis: 100%;
+  }
+}

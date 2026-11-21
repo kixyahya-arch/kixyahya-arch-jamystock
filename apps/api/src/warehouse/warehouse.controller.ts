@@ -27,6 +27,8 @@ import type { Database, Tx } from '../db/database.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
 import type { AuthUser } from '../auth/auth.service.js';
 import { ctxOf } from '../common/context.js';
+import { FilesService } from '../files/files.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { conflict, notFound, unprocessable } from '../common/errors.js';
 import { AuditService } from '../audit/audit.service.js';
 import { averySheetPdf, rollPdf } from './labels-pdf.js';
@@ -131,6 +133,8 @@ export class WarehouseController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(FilesService) private readonly files: FilesService,
+    @Inject(StorageService) private readonly storage: StorageService,
   ) {}
 
   // ------------------------------------------------------------------ dépôts
@@ -556,8 +560,43 @@ export class WarehouseController {
           WHERE m.article_id = $1 ORDER BY m.horodatage_serveur DESC, m.id DESC LIMIT 100`,
         [id],
       );
-      return { ...a, mouvements: mouvements.rows };
+      const photos = await tx.query<{ id: string; contexte: string; priseLe: Date; supprimable: boolean }>(
+        `SELECT id, contexte, prise_le AS "priseLe", (bl_id IS NULL AND reserve_id IS NULL AND contexte NOT IN ('DEPOT','RESERVE')) AS supprimable
+           FROM photo WHERE article_id = $1 AND televersee ORDER BY prise_le, id`,
+        [id],
+      );
+      const { photoId: _p, ...rest } = a as Record<string, unknown>;
+      return { ...rest, mouvements: mouvements.rows, photos: photos.rows.map((p) => ({ ...p, ...this.files.photoUrls(user.tenantId, p.id) })) };
     });
+  }
+
+  /**
+   * Gestion des photos (compte rendu Adam, point 6) : une photo ratée ou en double est retirée de la fiche, du stockage
+   * et de l'Espace Client. Les photos de preuve (BL, réserve, dépôt sans signature) ne se suppriment pas.
+   */
+  @Delete('articles/:id/photos/:photoId')
+  @RequirePermission('warehouse.manage')
+  async deletePhoto(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('photoId') photoId: string) {
+    const keys = await this.db.tx(ctxOf(user), async (tx) => {
+      const p = (
+        await tx.query<{ id: string; entreprise_id: string; contexte: string; bl_id: string | null; reserve_id: string | null; o: string; m: string | null; t: string | null }>(
+          `SELECT ph.id, a.entreprise_id, ph.contexte, ph.bl_id, ph.reserve_id, ph.cle_originale AS o, ph.cle_moyenne AS m, ph.cle_vignette AS t
+             FROM photo ph JOIN article a ON a.id = ph.article_id WHERE ph.id = $1 AND ph.article_id = $2 FOR UPDATE OF ph`,
+          [uuid.parse(photoId), uuid.parse(id)],
+        )
+      ).rows[0];
+      if (!p) throw notFound('Photo');
+      if (p.bl_id || p.reserve_id || p.contexte === 'DEPOT' || p.contexte === 'RESERVE') {
+        throw conflict('PHOTO_PREUVE', 'Cette photo est une preuve rattachée à un bon de livraison ou à une réserve : elle est conservée');
+      }
+      await tx.query('UPDATE reprise_photo SET photo_id = NULL WHERE photo_id = $1', [p.id]);
+      await tx.query('DELETE FROM photo WHERE id = $1', [p.id]);
+      await this.audit.record(tx, user, { action: 'PHOTO_SUPPRIMEE', objet: 'article', objetId: id, entrepriseId: p.entreprise_id, avant: { photoId: p.id, contexte: p.contexte } });
+      return [p.o, p.m, p.t].filter((k): k is string => !!k);
+    });
+    // fichiers retirés après la validation : une erreur de stockage ne fait pas réapparaître la photo
+    for (const k of keys) await this.storage.remove(k).catch(() => undefined);
+    return { supprimee: true };
   }
 
   @Post('articles/:id/correction')

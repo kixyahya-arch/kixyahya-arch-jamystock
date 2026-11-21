@@ -11,6 +11,9 @@ export type Route =
   | { name: 'sites' }
   | { name: 'documents' }
   | { name: 'dormants' }
+  | { name: 'packs' }
+  | { name: 'pack'; id: string }
+  | { name: 'activites' }
   | { name: 'compte' }
   | { name: 'utilisateurs' }
   | { name: 'invitation'; token: string }
@@ -32,6 +35,9 @@ export function parse(hash: string): Route {
   if (a === 'sites') return { name: 'sites' };
   if (a === 'documents') return { name: 'documents' };
   if (a === 'dormants') return { name: 'dormants' };
+  if (a === 'packs' && b) return { name: 'pack', id: b };
+  if (a === 'packs') return { name: 'packs' };
+  if (a === 'activites') return { name: 'activites' };
   return { name: 'inventaire' };
 }
 
@@ -41,6 +47,8 @@ export function href(r: Route): string {
       return `#/article/${r.id}`;
     case 'commande':
       return `#/commandes/${r.id}`;
+    case 'pack':
+      return `#/packs/${r.id}`;
     case 'inventaire':
       return '#/';
     case 'invitation':

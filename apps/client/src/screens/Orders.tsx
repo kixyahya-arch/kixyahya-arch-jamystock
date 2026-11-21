@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, get, getSession, listen, post } from '../lib/api';
+import { api, apiBlob, get, getSession, listen, post, saveBlob } from '../lib/api';
 import { href } from '../lib/router';
 import { EDITABLE, ORDER_STATUS, ORDER_TYPE, dateFr, euros, type CollectionPhoto, type Ctx, type Delivery, type Dispute, type Order, type OrderSummary } from '../lib/types';
 import { shrinkPhoto } from '../lib/photos';
@@ -23,7 +23,7 @@ const tone = (s: string): Tone =>
 /** SUI-01 : suivi des commandes. */
 export function Orders({ ctx }: { ctx: Ctx }) {
   const [orders, setOrders] = useState<OrderSummary[] | null>(null);
-  const [tab, setTab] = useState<'cours' | 'valider' | 'terminees'>('cours');
+  const [tab, setTab] = useState<'cours' | 'agenda' | 'transferts' | 'valider' | 'terminees'>('cours');
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const load = () => get<OrderSummary[]>('/orders').then(setOrders, (e) => setError((e as Error).message));
@@ -34,8 +34,23 @@ export function Orders({ ctx }: { ctx: Ctx }) {
   }, []);
 
   const toValidate = orders?.filter((o) => o.statut === 'EN_ATTENTE_VALIDATION') ?? [];
+  const when = (o: OrderSummary) => o.dateConfirmee ?? o.dateSouhaitee ?? '9999-12-31';
   const shown =
-    orders?.filter((o) => (tab === 'valider' ? o.statut === 'EN_ATTENTE_VALIDATION' : tab === 'terminees' ? DONE.includes(o.statut) : !DONE.includes(o.statut))) ?? [];
+    orders
+      ?.filter((o) =>
+        tab === 'valider'
+          ? o.statut === 'EN_ATTENTE_VALIDATION'
+          : tab === 'terminees'
+            ? DONE.includes(o.statut)
+            : tab === 'transferts'
+              ? o.natureCollecte === 'TRANSFERT'
+              : tab === 'agenda'
+                ? !DONE.includes(o.statut) && !!(o.dateConfirmee ?? o.dateSouhaitee)
+                : !DONE.includes(o.statut),
+      )
+      // l'agenda et les transferts se lisent dans l'ordre des dates prévues
+      .sort((a, b) => (tab === 'agenda' || tab === 'transferts' ? when(a).localeCompare(when(b)) : 0)) ?? [];
+  const label = (o: OrderSummary) => (o.natureCollecte === 'TRANSFERT' ? 'Transfert' : o.natureCollecte === 'RETOUR' ? 'Retour au dépôt' : ORDER_TYPE[o.type]);
   const project = (id: string | null) => ctx.projets.find((p) => p.id === id)?.nom;
 
   return (
@@ -50,26 +65,32 @@ export function Orders({ ctx }: { ctx: Ctx }) {
         onChange={setTab}
         options={[
           { value: 'cours', label: 'En cours' },
+          { value: 'agenda', label: 'À venir, par date' },
+          ...(orders?.some((o) => o.natureCollecte === 'TRANSFERT') ? [{ value: 'transferts' as const, label: 'Transferts' }] : []),
           ...(toValidate.length ? [{ value: 'valider' as const, label: `À valider · ${toValidate.length}` }] : []),
           { value: 'terminees', label: 'Terminées' },
         ]}
       />
       {error && <Banner kind="error">{error}</Banner>}
       {!orders && !error && <p className="hint">Chargement…</p>}
-      {orders && shown.length === 0 && <p className="empty">Aucune commande ici.</p>}
+      {orders && shown.length === 0 && <p className="empty">{tab === 'agenda' ? 'Rien de programmé pour l’instant.' : 'Aucune commande ici.'}</p>}
+      {tab === 'transferts' && <p className="hint">Un transfert se demande depuis « Sur mes sites », avec la date souhaitée. Son bon de transfert se télécharge sur sa fiche.</p>}
       <ul className="order-list">
         {shown.map((o) => (
           <li key={o.id}>
             <a href={href({ name: 'commande', id: o.id })}>
               <span className="order-main">
-                <strong>{ORDER_TYPE[o.type]}</strong>
+                <strong>{label(o)}</strong>
                 <span className="mono">{o.numero}</span>
               </span>
               <span className="order-meta">
                 {o.nbArticles} bien{o.nbArticles > 1 ? 's' : ''}
                 {project(o.projetId) ? ` · ${project(o.projetId)}` : ''}
+                {o.natureCollecte === 'TRANSFERT' ? ` → ${project(o.destinationProjetId ?? null) ?? o.destination ?? 'autre site'}` : ''}
               </span>
-              <span className="order-date">{o.dateConfirmee ? `Confirmée le ${dateFr(o.dateConfirmee)}` : `Souhaitée le ${dateFr(o.dateSouhaitee)}`}</span>
+              <span className="order-date">
+                {o.dateConfirmee ? `Confirmée le ${dateFr(o.dateConfirmee)}${o.creneauConfirme ? `, ${o.creneauConfirme}` : ''}` : `Souhaitée le ${dateFr(o.dateSouhaitee)}`}
+              </span>
               <StatusPill label={ORDER_STATUS[o.statut] ?? o.statut} tone={tone(o.statut)} />
             </a>
           </li>
@@ -126,9 +147,27 @@ export function OrderView({ id, role }: { id: string; role: string }) {
       </a>
       <section className="page-head">
         <span className="eyebrow">
-          — {ORDER_TYPE[o.type]} · <span className="mono">{o.numero}</span>
+          — {o.natureCollecte === 'TRANSFERT' ? 'Transfert de site à site' : ORDER_TYPE[o.type]} · <span className="mono">{o.numero}</span>
         </span>
         <h1>{ORDER_STATUS[o.statut] ?? o.statut}</h1>
+        {o.natureCollecte === 'TRANSFERT' && (
+          <div className="row-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                apiBlob(`/orders/${o.id}/bon-transfert.pdf`)
+                  .then((b) => saveBlob(b, `bon-transfert-${o.numero ?? o.id.slice(0, 8)}.pdf`))
+                  .catch((e) => setError((e as Error).message))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Bon de transfert (PDF)
+            </button>
+          </div>
+        )}
       </section>
 
       {o.suivi && !['LIVREE', 'LIVREE_AVEC_RESERVES', 'STOCKEE', 'ANNULEE'].includes(o.statut) && (

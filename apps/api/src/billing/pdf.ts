@@ -530,3 +530,200 @@ export async function inventoryPdf(d: InventoryPdfData): Promise<Buffer> {
   }
   return save(w, d.genereLe);
 }
+
+// ===========================================================================================================
+// Packs : planche d'aménagement par pièce (compte rendu Adam, points 3, 4 et 8)
+// ===========================================================================================================
+
+export interface PlanchePdfData {
+  emetteur: string;
+  client: string;
+  pack: string;
+  site: string | null;
+  description: string | null;
+  genereLe: Date;
+  /** pièces dans l'ordre d'affichage ; « ambiance » : visuel de la pièce aménagée (JPEG), quand il en existe un */
+  pieces: {
+    nom: string;
+    ambiance?: Buffer | null;
+    biens: { libelle: string; qr: string; dimensions: string | null; statut: string; photo: Buffer | null }[];
+  }[];
+}
+
+/**
+ * Planche d'aménagement : les meubles du pack regroupés par pièce, en photos. Chaque pièce peut recevoir un visuel
+ * d'ambiance au-dessus de ses meubles (généré plus tard par IA, ou une photo de l'appartement témoin).
+ */
+export async function planchePdf(d: PlanchePdfData): Promise<Buffer> {
+  const w = await open(`Planche d'aménagement ${d.pack}`, `${d.emetteur} · planche d'aménagement « ${d.pack} » · ${dateFr(d.genereLe)}`);
+  const right = A4[0] - M;
+  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
+  w.text(d.emetteur, M + 26, w.y, { size: 15, font: w.bold });
+  w.text("PLANCHE D'AMÉNAGEMENT", right, w.y, { size: 12, font: w.bold, align: 'right' });
+  w.y -= 30;
+  w.para(d.pack, { size: 17, font: w.bold, gap: 2 });
+  w.para([d.client, d.site].filter(Boolean).join(' · '), { size: 10, color: MUTED, gap: 2 });
+  const total = d.pieces.reduce((t, p) => t + p.biens.length, 0);
+  const nommees = d.pieces.filter((p) => p.nom !== PIECE_A_REPARTIR).length;
+  w.para(`${total} bien${total > 1 ? 's' : ''}${nommees ? ` · ${nommees} pièce${nommees > 1 ? 's' : ''}` : ''} · établie le ${dateFr(d.genereLe)}`, { size: 9, color: MUTED, gap: 6 });
+  if (d.description) w.para(d.description, { size: 9.5, gap: 6 });
+  w.rule();
+  w.y -= 18;
+
+  const COLS = 3;
+  const GAP = 12;
+  const cardW = (right - M - GAP * (COLS - 1)) / COLS;
+  const photoH = Math.round(cardW * 0.75);
+  const cardH = photoH + 44;
+  for (const p of d.pieces) {
+    // titre de pièce jamais seul en bas de page
+    w.ensure(28 + (p.ambiance ? 200 : cardH));
+    w.text(`${p.nom}`, M, w.y, { size: 13, font: w.bold });
+    w.text(`${p.biens.length} bien${p.biens.length > 1 ? 's' : ''}`, right, w.y, { size: 9, color: MUTED, align: 'right' });
+    w.y -= 8;
+    w.page.drawLine({ start: { x: M, y: w.y }, end: { x: right, y: w.y }, thickness: 1.2, color: ACCENT });
+    w.y -= 12;
+    if (p.ambiance) {
+      try {
+        const img = await w.doc.embedJpg(p.ambiance);
+        const maxH = 260;
+        const s = Math.min((right - M) / img.width, maxH / img.height);
+        w.ensure(img.height * s + 10);
+        w.page.drawImage(img, { x: M, y: w.y - img.height * s, width: img.width * s, height: img.height * s });
+        w.y -= img.height * s + 14;
+      } catch {
+        // visuel illisible : la planche part sans lui
+      }
+    }
+    for (let i = 0; i < p.biens.length; i += COLS) {
+      w.ensure(cardH);
+      const top = w.y;
+      for (const [j, b] of p.biens.slice(i, i + COLS).entries()) {
+        const x = M + j * (cardW + GAP);
+        let drawn = false;
+        if (b.photo) {
+          try {
+            const img = await w.doc.embedJpg(b.photo);
+            w.page.drawImage(img, { x, y: top - photoH, width: cardW, height: photoH });
+            drawn = true;
+          } catch {
+            /* photo illisible */
+          }
+        }
+        if (!drawn) {
+          w.page.drawRectangle({ x, y: top - photoH, width: cardW, height: photoH, color: LINE });
+          w.text('photo à venir', x + cardW / 2 - w.width('photo à venir', 8) / 2, top - photoH / 2 - 3, { size: 8, color: MUTED });
+        }
+        const lines = w.wrap(b.libelle, cardW, 9, w.bold).slice(0, 2);
+        let y = top - photoH - 12;
+        for (const l of lines) {
+          w.text(l, x, y, { size: 9, font: w.bold });
+          y -= 11;
+        }
+        w.text([b.qr, b.dimensions].filter(Boolean).join(' · '), x, y, { size: 7.5, color: MUTED });
+        y -= 10;
+        w.text(b.statut, x, y, { size: 7.5, color: MUTED });
+      }
+      w.y = top - cardH - 8;
+    }
+    w.y -= 10;
+  }
+  return save(w, d.genereLe);
+}
+
+/** Nom de la rubrique des biens sans pièce attribuée. */
+export const PIECE_A_REPARTIR = 'À répartir';
+
+// ===========================================================================================================
+// Bon de transfert (compte rendu Adam, points 7 et 8)
+// ===========================================================================================================
+
+export interface TransfertPdfData {
+  emetteur: string;
+  numero: string;
+  client: string;
+  statut: string;
+  demandeLe: Date;
+  demandePar: string | null;
+  datePrevue: string | null;
+  creneau: string | null;
+  depart: { site: string | null; adresse: string | null };
+  arrivee: { site: string | null; adresse: string | null };
+  contact: { nom: string; telephone: string } | null;
+  genereLe: Date;
+  biens: { libelle: string; qr: string; dimensions: string | null; enleveLe: Date | null; deposeLe: Date | null; etat: string; photo: Buffer | null }[];
+}
+
+const heure = (d: Date) => `${dateFr(d)} à ${d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}`;
+
+/** Bon de transfert de site à site : date, départ et arrivée, biens avec leur photo, enlèvement et dépôt de chacun. */
+export async function transfertPdf(d: TransfertPdfData): Promise<Buffer> {
+  const w = await open(`Bon de transfert ${d.numero}`, `${d.emetteur} · bon de transfert ${d.numero} · ${dateFr(d.genereLe)}`);
+  const right = A4[0] - M;
+  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
+  w.text(d.emetteur, M + 26, w.y, { size: 15, font: w.bold });
+  w.text('BON DE TRANSFERT', right, w.y, { size: 13, font: w.bold, align: 'right' });
+  w.y -= 20;
+  w.text(`N° ${d.numero}`, right, w.y, { size: 10, font: w.bold, align: 'right' });
+  w.y -= 26;
+
+  const facts: [string, string][] = [
+    ['Client', d.client],
+    ['Statut', d.statut],
+    ['Date prévue', d.datePrevue ? `${dateFr(d.datePrevue)}${d.creneau ? ` · ${d.creneau}` : ''}` : 'à planifier'],
+    ['Départ', [d.depart.site, d.depart.adresse].filter(Boolean).join(' · ') || '—'],
+    ['Arrivée', [d.arrivee.site, d.arrivee.adresse].filter(Boolean).join(' · ') || '—'],
+    ...(d.contact ? ([['Contact', `${d.contact.nom} · ${d.contact.telephone}`]] as [string, string][]) : []),
+    ['Demandé le', `${heure(d.demandeLe)}${d.demandePar ? ` par ${d.demandePar}` : ''}`],
+  ];
+  for (const [k, v] of facts) {
+    w.text(k, M, w.y, { size: 8.5, color: MUTED });
+    w.para(v, { x: M + 80, size: 9.5 });
+    w.y -= 2;
+  }
+  w.y -= 10;
+
+  w.text(`Biens transférés (${d.biens.length})`, M, w.y, { size: 11, font: w.bold });
+  w.y -= 10;
+  w.rule();
+  w.y -= 8;
+  const THUMB = 54;
+  const textX = M + THUMB + 12;
+  for (const b of d.biens) {
+    w.ensure(THUMB + 14);
+    const top = w.y;
+    if (b.photo) {
+      try {
+        const img = await w.doc.embedJpg(b.photo);
+        w.page.drawImage(img, { x: M, y: top - THUMB, width: THUMB, height: THUMB });
+      } catch {
+        w.page.drawRectangle({ x: M, y: top - THUMB, width: THUMB, height: THUMB, color: LINE });
+      }
+    } else w.page.drawRectangle({ x: M, y: top - THUMB, width: THUMB, height: THUMB, color: LINE });
+    const lines = w.wrap(b.libelle, 250, 10, w.bold).slice(0, 2);
+    let y = top - 11;
+    for (const l of lines) {
+      w.text(l, textX, y, { size: 10, font: w.bold });
+      y -= 12;
+    }
+    w.text([b.qr, b.dimensions].filter(Boolean).join(' · '), textX, y, { size: 8.5, color: MUTED });
+    w.text(b.etat, right, top - 11, { size: 9, font: w.bold, align: 'right' });
+    w.text(b.enleveLe ? `Enlevé le ${heure(b.enleveLe)}` : 'Enlèvement à venir', right, top - 24, { size: 8.5, color: MUTED, align: 'right' });
+    w.text(b.deposeLe ? `Déposé le ${heure(b.deposeLe)}` : 'Dépôt à venir', right, top - 36, { size: 8.5, color: MUTED, align: 'right' });
+    w.y = top - THUMB - 6;
+    w.rule(w.y);
+    w.y -= 8;
+  }
+
+  w.ensure(110);
+  w.y -= 12;
+  const half = (right - M - 20) / 2;
+  for (const [i, label] of ['Remis au départ par', 'Reçu à l’arrivée par'].entries()) {
+    const x = M + i * (half + 20);
+    w.text(label, x, w.y, { size: 9, color: MUTED });
+    w.page.drawRectangle({ x, y: w.y - 80, width: half, height: 70, borderColor: LINE, borderWidth: 0.8 });
+  }
+  w.y -= 92;
+  w.para('Le chauffeur fait signer le bon d’enlèvement au départ et note le nom de la personne qui réceptionne à l’arrivée ; ces preuves restent dans l’Espace Client.', { size: 7.5, color: MUTED });
+  return save(w, d.genereLe);
+}

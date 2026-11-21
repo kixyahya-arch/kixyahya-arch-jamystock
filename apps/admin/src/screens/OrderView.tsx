@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { get, post } from '../lib/api';
+import { get, openPdf, post } from '../lib/api';
 import { href } from '../lib/router';
 import type { OrderDetail, Planning } from '../lib/types';
 import { MISSION_STATUS, MISSION_TYPE, ORDER_STATUS, ORDER_TYPE, ARTICLE_STATUS, dateFr, dateShort, timeFr } from '../lib/labels';
@@ -108,7 +108,17 @@ export function OrderView({ id }: { id: string }) {
               {o.natureCollecte && o.natureCollecte !== 'NOUVEAUX' && (
                 <>
                   <dt>Nature</dt>
-                  <dd>{o.natureCollecte === 'RETOUR' ? 'Retour au dépôt d’objets installés sur site' : 'Transfert de site à site'}</dd>
+                  <dd>
+                    {o.natureCollecte === 'RETOUR' ? 'Retour au dépôt d’objets installés sur site' : 'Transfert de site à site'}
+                    {o.natureCollecte === 'TRANSFERT' && (
+                      <>
+                        {' · '}
+                        <button type="button" className="link" onClick={() => void openPdf(`/orders/${o.id}/bon-transfert.pdf`, `bon-transfert-${o.numero}.pdf`).catch((e) => setError((e as Error).message))}>
+                          Bon de transfert (PDF)
+                        </button>
+                      </>
+                    )}
+                  </dd>
                 </>
               )}
               {o.type !== 'RETRAIT' && (

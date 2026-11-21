@@ -1,0 +1,21 @@
+/** Pièces proposées pour ranger les biens d'un pack (même liste que le domaine, packages/domain/src/packs.ts). */
+export const PIECES = [
+  'Entrée',
+  'Séjour',
+  'Salon',
+  'Salle à manger',
+  'Cuisine',
+  'Chambre parentale',
+  'Chambre',
+  'Chambre enfant',
+  'Bureau',
+  'Salle de bain',
+  "Salle d'eau",
+  'WC',
+  'Dressing',
+  'Buanderie',
+  'Balcon / terrasse',
+  'Jardin',
+  'Accueil',
+  'Espace de vente',
+];

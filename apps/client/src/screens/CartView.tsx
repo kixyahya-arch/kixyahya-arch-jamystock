@@ -218,7 +218,7 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
   );
 }
 
-/** CMD-08 : enregistrer le panier comme modèle (« Kit stand de vente complet »). */
+/** CMD-08 : enregistrer le panier comme pack (« Appartement témoin T3 »). */
 function SaveTemplate({ projetId }: { projetId: string | null }) {
   const [open, setOpen] = useState(false);
   const [nom, setNom] = useState('');
@@ -228,7 +228,7 @@ function SaveTemplate({ projetId }: { projetId: string | null }) {
     setBusy(true);
     try {
       await post('/me/cart-templates', { nom: nom.trim(), ...(projetId ? { projetId } : {}) });
-      setMsg({ ok: true, text: `Modèle « ${nom.trim()} » enregistré : retrouvez-le sous le panier.` });
+      setMsg({ ok: true, text: `Pack « ${nom.trim()} » enregistré : retrouvez-le dans Mes packs, pour le ranger pièce par pièce.` });
       setOpen(false);
       setNom('');
       window.dispatchEvent(new Event('jamystock:templates'));
@@ -249,8 +249,8 @@ function SaveTemplate({ projetId }: { projetId: string | null }) {
           }}
         >
           <label>
-            Nom du modèle
-            <input value={nom} onChange={(e) => setNom(e.target.value)} maxLength={80} placeholder="Ex. Kit stand de vente complet" autoFocus />
+            Nom du pack
+            <input value={nom} onChange={(e) => setNom(e.target.value)} maxLength={80} placeholder="Ex. Appartement témoin T3" autoFocus />
           </label>
           <button type="submit" className="btn primary small" disabled={busy || !nom.trim()}>
             {busy ? '…' : 'Enregistrer'}
@@ -261,7 +261,7 @@ function SaveTemplate({ projetId }: { projetId: string | null }) {
         </form>
       ) : (
         <button type="button" className="link" onClick={() => (setOpen(true), setMsg(null))}>
-          Enregistrer ce panier comme modèle
+          Enregistrer ce panier comme pack
         </button>
       )}
       {msg && <Banner kind={msg.ok ? 'ok' : 'error'}>{msg.text}</Banner>}
@@ -269,7 +269,7 @@ function SaveTemplate({ projetId }: { projetId: string | null }) {
   );
 }
 
-/** CMD-08 : modèles enregistrés, à remettre au panier en un clic ; les biens indisponibles sont signalés. */
+/** CMD-08 : packs enregistrés, à remettre au panier en un clic ; les biens indisponibles sont signalés. */
 function Templates({ projectName }: { projectName: (k: string) => string }) {
   const [items, setItems] = useState<CartTemplate[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -313,8 +313,10 @@ function Templates({ projectName }: { projectName: (k: string) => string }) {
 
   return (
     <section className="templates">
-      <h2>Mes modèles</h2>
-      <p className="hint">Un modèle remet en un clic le même ensemble de biens au panier.</p>
+      <h2>Mes packs</h2>
+      <p className="hint">
+        Un pack remet en un clic le même ensemble de biens au panier. <a href={href({ name: 'packs' })}>Tous mes packs</a>
+      </p>
       {report && (
         <Banner kind={report.kind}>
           {report.text}
@@ -331,7 +333,9 @@ function Templates({ projectName }: { projectName: (k: string) => string }) {
         {items.map((m) => (
           <li key={m.id}>
             <span className="template-main">
-              <strong>{m.nom}</strong>
+              <a href={href({ name: 'pack', id: m.id })}>
+                <strong>{m.nom}</strong>
+              </a>
               <small>
                 {projectName(m.projetId ?? '')} · {m.nbDisponibles === m.nbArticles ? `${m.nbArticles} bien${m.nbArticles > 1 ? 's' : ''}, tous disponibles` : `${m.nbDisponibles} sur ${m.nbArticles} disponibles`}
                 {m.auteur ? ` · créé par ${m.auteur}` : ''}
