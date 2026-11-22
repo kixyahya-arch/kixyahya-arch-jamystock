@@ -3,7 +3,8 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import sharp from 'sharp';
 import { groupByPiece, isClientRole, normalizePiece, parisClock, uuidv7 } from '@jamystock/domain';
-import { DATABASE } from '../common/tokens.js';
+import { CONFIG, DATABASE } from '../common/tokens.js';
+import type { AppConfig } from '../config.js';
 import type { Database, Tx } from '../db/database.js';
 import { CurrentUser, RequirePermission } from '../auth/decorators.js';
 import type { AuthUser } from '../auth/auth.service.js';
@@ -84,7 +85,7 @@ const STATUT: Record<string, string> = {
   DETRUIT: 'Détruit',
 };
 
-interface PackRow {
+export interface PackRow {
   id: string;
   nom: string;
   description: string | null;
@@ -101,7 +102,26 @@ interface PackRow {
   modifie_le: Date | null;
 }
 
-interface PackArticle {
+interface AmbianceRow {
+  id: string;
+  piece: string;
+  source: 'IA' | 'MANUEL';
+  statut: 'EN_COURS' | 'PRET' | 'ECHEC' | 'SUPPRIME';
+  cle: string | null;
+  erreur: string | null;
+  created_at: Date;
+}
+
+export interface AmbianceView {
+  id: string;
+  statut: 'EN_COURS' | 'PRET' | 'ECHEC';
+  source: 'IA' | 'MANUEL';
+  url: string | null;
+  erreur: string | null;
+  le: Date;
+}
+
+export interface PackArticle {
   id: string;
   libelle: string;
   qr: string;
@@ -115,7 +135,7 @@ interface PackArticle {
   photo: string | null;
 }
 
-const dims = (a: Pick<PackArticle, 'longueur_m' | 'largeur_m' | 'hauteur_m'>) =>
+export const dims = (a: Pick<PackArticle, 'longueur_m' | 'largeur_m' | 'hauteur_m'>) =>
   a.longueur_m && a.largeur_m ? `${[a.longueur_m, a.largeur_m, a.hauteur_m].filter((v) => v != null).map((v) => Number(v).toLocaleString('fr-FR')).join(' × ')} m` : null;
 
 export function unavailable(a: Pick<PackArticle, 'statut' | 'engage'> | undefined): string | null {
@@ -141,7 +161,57 @@ export class PacksService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(StorageService) private readonly storage: StorageService,
     @Inject(FilesService) private readonly files: FilesService,
+    @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /** Dernier visuel de chaque pièce du pack ; une génération restée en cours après le délai est montrée en échec. */
+  async ambiances(tx: Tx, user: AuthUser, packId: string): Promise<Map<string, AmbianceView>> {
+    const r = await tx.query<AmbianceRow>(
+      `SELECT DISTINCT ON (piece) id, piece, source, statut, cle, erreur, created_at FROM pack_ambiance WHERE pack_id = $1 ORDER BY piece, created_at DESC, id DESC`,
+      [packId],
+    );
+    const stale = Date.now() - this.config.higgsfield.timeoutMs - 3 * 60_000;
+    const out = new Map<string, AmbianceView>();
+    for (const a of r.rows) {
+      if (a.statut === 'SUPPRIME') continue;
+      const interrompue = a.statut === 'EN_COURS' && a.created_at.getTime() < stale;
+      out.set(a.piece, {
+        id: a.id,
+        statut: interrompue ? 'ECHEC' : a.statut,
+        source: a.source,
+        url: a.statut === 'PRET' && a.cle ? this.files.ambianceUrl(user.tenantId, a.id) : null,
+        erreur: interrompue ? 'Génération interrompue, relancez-la' : a.erreur,
+        le: a.created_at,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Générations IA restantes ce mois-ci. Une génération échouée (erreur renseignée) n'est pas facturée par
+   * Higgsfield et ne compte pas ; un visuel retiré ensuite reste compté. Mois de Paris, plafond par client et
+   * plafond global de l'organisation.
+   */
+  async quota(tenantId: string, entrepriseId: string): Promise<number> {
+    const h = this.config.higgsfield;
+    const r = await this.db.tx({ tenantId, role: 'SYSTEM' }, (tx) =>
+      tx.query<{ client: number; total: number }>(
+        `SELECT count(*) FILTER (WHERE entreprise_id = $1)::int AS client, count(*)::int AS total FROM pack_ambiance
+          WHERE source = 'IA' AND erreur IS NULL AND created_at >= (date_trunc('month', now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris')`,
+        [entrepriseId],
+      ),
+    );
+    const { client, total } = r.rows[0]!;
+    return Math.max(0, Math.min(h.maxParClientParMois - client, h.maxParMois - total));
+  }
+
+  async removeFiles(keys: string[]) {
+    for (const k of keys) await this.storage.remove(k).catch(() => undefined);
+  }
+
+  get iaActive(): boolean {
+    return !!(this.config.higgsfield.keyId && this.config.higgsfield.keySecret);
+  }
 
   async load(tx: Tx, id: string, forUpdate = false): Promise<PackRow> {
     const m = (
@@ -213,6 +283,7 @@ export class PacksService {
   /** Détail : biens regroupés par pièce, avec leur photo et leur disponibilité du moment. */
   async detail(tx: Tx, user: AuthUser, m: PackRow) {
     const all = await this.articles(tx, m.article_ids);
+    const amb = await this.ambiances(tx, user, m.id);
     const items = m.article_ids.map((aid) => {
       const a = all.get(aid);
       return {
@@ -241,8 +312,9 @@ export class PacksService {
       modifiable: !isClientRole(user.role) || m.cree_par === user.id || user.role !== 'B2B_USER',
       nbArticles: items.length,
       nbDisponibles: items.filter((a) => !a.indisponible).length,
-      pieces: groupByPiece(items, (a) => a.piece).map((g) => ({ piece: g.piece, articles: g.items })),
+      pieces: groupByPiece(items, (a) => a.piece).map((g) => ({ piece: g.piece, articles: g.items, ambiance: g.piece ? (amb.get(g.piece) ?? null) : null })),
       articles: items,
+      visuels: { ia: this.iaActive, restantsCeMois: this.iaActive ? await this.quota(user.tenantId, m.entreprise_id) : null },
     };
   }
 
@@ -256,7 +328,11 @@ export class PacksService {
         [[...all.values()].map((a) => a.photo).filter(Boolean)],
       );
       const emetteur = (await tx.query<{ raison_sociale: string }>('SELECT raison_sociale FROM organisation WHERE id = app_tenant()')).rows[0]?.raison_sociale ?? 'JAMYSTOCK';
-      return { m, all, keys: new Map(keys.rows.map((k) => [k.id, k.cle])), emetteur };
+      const amb = await tx.query<{ piece: string; cle: string }>(
+        `SELECT DISTINCT ON (piece) piece, cle FROM pack_ambiance WHERE pack_id = $1 AND statut = 'PRET' AND cle IS NOT NULL ORDER BY piece, created_at DESC, id DESC`,
+        [m.id],
+      );
+      return { m, all, keys: new Map(keys.rows.map((k) => [k.id, k.cle])), emetteur, ambiances: new Map(amb.rows.map((a) => [a.piece, a.cle])) };
     });
     const visibles = job.m.article_ids.map((aid) => job.all.get(aid)).filter((a): a is PackArticle => !!a);
     const groups = groupByPiece(visibles, (a) => job.m.pieces?.[a.id] ?? null);
@@ -273,7 +349,14 @@ export class PacksService {
           : null;
         biens.push({ libelle: a.libelle, qr: a.qr, dimensions: dims(a), statut: `${STATUT[a.statut] ?? a.statut}${a.projet ? ` · ${a.projet}` : ''}`, photo });
       }
-      pieces.push({ nom: g.piece ?? PIECE_A_REPARTIR, biens });
+      const ambKey = g.piece ? job.ambiances.get(g.piece) : undefined;
+      const ambiance = ambKey
+        ? await this.storage
+            .get(ambKey)
+            .then((b) => sharp(b, { failOn: 'none' }).resize(1400, 1050, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 80 }).toBuffer())
+            .catch(() => null)
+        : null;
+      pieces.push({ nom: g.piece ?? PIECE_A_REPARTIR, ambiance, biens });
     }
     const at = new Date();
     const data = await planchePdf({ emetteur: job.emetteur, client: job.m.entreprise ?? 'Client', pack: job.m.nom, site: job.m.projet, description: job.m.description, genereLe: at, pieces });
@@ -415,10 +498,20 @@ export class CartTemplatesController {
     return this.db.tx(ctxOf(user), async (tx) => {
       const m = await this.packs.load(tx, id, true);
       if (user.role === 'B2B_USER' && m.cree_par !== user.id) throw forbidden('Seul son auteur ou un administrateur supprime un pack');
+      const keys = await releaseAmbiances(tx, m.id);
       await tx.query('DELETE FROM modele_panier WHERE id = $1', [m.id]);
-      return { supprime: true };
+      return { supprime: true, keys };
+    }).then(async ({ supprime, keys }) => {
+      await this.packs.removeFiles(keys);
+      return { supprime };
     });
   }
+}
+
+/** Avant la suppression d'un pack : ses visuels passent en SUPPRIME (ils restent comptés) ; renvoie les fichiers à effacer. */
+async function releaseAmbiances(tx: Tx, packId: string): Promise<string[]> {
+  const r = await tx.query<{ cle: string | null }>(`UPDATE pack_ambiance SET statut = 'SUPPRIME', termine_le = coalesce(termine_le, now()) WHERE pack_id = $1 AND statut <> 'SUPPRIME' RETURNING cle`, [packId]);
+  return r.rows.map((x) => x.cle).filter((x): x is string => !!x);
 }
 
 async function updatePack(tx: Tx, packs: PacksService, user: AuthUser, m: PackRow, b: z.infer<typeof PackPatch>) {
@@ -518,9 +611,13 @@ export class BoPacksController {
   remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.db.tx(ctxOf(user), async (tx) => {
       const m = await this.packs.load(tx, id, true);
+      const keys = await releaseAmbiances(tx, m.id);
       await tx.query('DELETE FROM modele_panier WHERE id = $1', [m.id]);
       await this.audit.record(tx, user, { action: 'PACK_SUPPRIME', objet: 'modele_panier', objetId: m.id, entrepriseId: m.entreprise_id, apres: { nom: m.nom } });
-      return { supprime: true };
+      return { supprime: true, keys };
+    }).then(async ({ supprime, keys }) => {
+      await this.packs.removeFiles(keys);
+      return { supprime };
     });
   }
 }

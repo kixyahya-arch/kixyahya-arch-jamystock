@@ -46,6 +46,11 @@ services:
       # E-mails (invitations, confirmations) et paiement en ligne, à renseigner dans le tableau de bord
       - key: BREVO_API_KEY
         sync: false
+      # Visuels d'aménagement des packs par IA (Higgsfield) : sans clé, seule l'image ajoutée à la main est proposée
+      - key: HIGGSFIELD_API_KEY_ID
+        sync: false
+      - key: HIGGSFIELD_API_KEY_SECRET
+        sync: false
       - key: MAIL_FROM
         sync: false
       - key: STRIPE_SECRET_KEY

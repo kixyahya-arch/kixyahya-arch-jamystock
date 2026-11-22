@@ -26,7 +26,39 @@ export interface AppConfig {
   mapTilesUrl: string;
   /** Reprise de données : autorise le téléchargement de photos depuis une adresse locale ou privée (tests seulement). */
   reprisePhotosLocal: boolean;
+  /**
+   * Visuels d'aménagement des packs générés par Higgsfield (api.higgsfield.ai). Sans clé, la génération est
+   * désactivée et seule l'image ajoutée à la main est proposée. Les plafonds protègent le solde du compte.
+   */
+  higgsfield: {
+    keyId?: string;
+    keySecret?: string;
+    baseUrl: string;
+    /** chemin du modèle, par ex. higgsfield-ai/soul/standard */
+    model: string;
+    /** champ du modèle qui reçoit les photos des meubles (image_url, image_urls…) ; vide : texte seul */
+    imageField?: string;
+    /** paramètres ajoutés tels quels au corps de la requête (JSON), par ex. {"resolution":"2K"} */
+    params: Record<string, unknown>;
+    aspectRatio: string;
+    maxParClientParMois: number;
+    maxParMois: number;
+    pollMs: number;
+    timeoutMs: number;
+  };
 }
+
+function jsonObject(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+const intOr = (raw: string | undefined, d: number) => (raw && /^\d+$/.test(raw) ? Number(raw) : d);
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const appDatabaseUrl = env.APP_DATABASE_URL ?? env.DATABASE_URL;
@@ -61,5 +93,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     mapTilesUrl: env.MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     reprisePhotosLocal: env.REPRISE_PHOTOS_LOCAL === 'on',
+    higgsfield: {
+      keyId: env.HIGGSFIELD_API_KEY_ID || undefined,
+      keySecret: env.HIGGSFIELD_API_KEY_SECRET || undefined,
+      baseUrl: (env.HIGGSFIELD_URL || 'https://api.higgsfield.ai').replace(/\/+$/, ''),
+      model: (env.HIGGSFIELD_MODEL || 'higgsfield-ai/soul/standard').replace(/^\/+|\/+$/g, ''),
+      imageField: env.HIGGSFIELD_IMAGE_FIELD || undefined,
+      params: jsonObject(env.HIGGSFIELD_PARAMS),
+      aspectRatio: env.HIGGSFIELD_ASPECT_RATIO || '4:3',
+      maxParClientParMois: intOr(env.HIGGSFIELD_MAX_PAR_CLIENT, 20),
+      maxParMois: intOr(env.HIGGSFIELD_MAX_PAR_MOIS, 100),
+      pollMs: intOr(env.HIGGSFIELD_POLL_MS, 2000),
+      timeoutMs: intOr(env.HIGGSFIELD_TIMEOUT_MS, 5 * 60_000),
+    },
   };
 }

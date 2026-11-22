@@ -308,6 +308,9 @@ sans modifier la position et une alerte de réconciliation est créée. Le contr
 | `STRIPE_WEBHOOK_SECRET` | Signature des webhooks Stripe (événements `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`) | Les paiements ne sont pas rapprochés automatiquement. |
 | `GEOCODER` (`ban` ou `off`), `GEOCODER_URL` | Géolocalisation des adresses pour la carte et l'heure d'arrivée | `off` hors production : pas de coordonnées pour les nouvelles adresses. |
 | `MAP_TILES_URL` | Fond de carte (par défaut OpenStreetMap) | Tuiles OpenStreetMap ; pour un usage soutenu, prendre un fournisseur de tuiles. |
+| `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | Visuels d'aménagement des pièces d'un pack générés par IA (Higgsfield, clé créée dans la console Higgsfield, console.higgsfield.ai) | Le bouton « Générer le visuel (IA) » est masqué ; l'image ajoutée à la main reste possible. |
+| `HIGGSFIELD_MODEL`, `HIGGSFIELD_IMAGE_FIELD`, `HIGGSFIELD_PARAMS`, `HIGGSFIELD_ASPECT_RATIO` | Modèle appelé (chemin, par défaut `higgsfield-ai/soul/standard`), champ qui reçoit les photos des meubles (par ex. `image_urls` ; vide : texte seul), paramètres JSON ajoutés à la requête, format (par défaut `4:3`) | Modèle Soul, texte seul. |
+| `HIGGSFIELD_MAX_PAR_CLIENT`, `HIGGSFIELD_MAX_PAR_MOIS` | Plafonds de visuels générés par mois : par client (20) et pour toute l'organisation (100). Une génération échouée ne compte pas. | Valeurs par défaut. |
 | `TWILIO_*` (à venir) | SMS « chauffeur en route » | Le SMS reste dans la file, seul l'e-mail part. |
 
 Voir [docs/points-ouverts.md](docs/points-ouverts.md) pour les questions à trancher avec le client et les hypothèses prises,

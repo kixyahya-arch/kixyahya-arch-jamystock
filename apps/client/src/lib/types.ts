@@ -297,8 +297,20 @@ export interface PackDetail {
   modifiable: boolean;
   nbArticles: number;
   nbDisponibles: number;
-  pieces: { piece: string | null; articles: PackArticle[] }[];
+  pieces: { piece: string | null; articles: PackArticle[]; ambiance: Ambiance | null }[];
   articles: PackArticle[];
+  /** ia : génération Higgsfield activée ; restantsCeMois : générations encore possibles ce mois-ci */
+  visuels: { ia: boolean; restantsCeMois: number | null };
+}
+
+/** Visuel d'aménagement d'une pièce : généré par IA ou ajouté à la main. */
+export interface Ambiance {
+  id: string;
+  statut: 'EN_COURS' | 'PRET' | 'ECHEC';
+  source: 'IA' | 'MANUEL';
+  url: string | null;
+  erreur: string | null;
+  le: string;
 }
 
 export interface Activity {

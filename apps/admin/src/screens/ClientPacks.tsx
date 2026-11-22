@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { del, get, openPdf, post } from '../lib/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, del, get, openPdf, post } from '../lib/api';
 import { Banner } from '../components/ui';
 
 interface Pack {
@@ -10,6 +10,129 @@ interface Pack {
   nbDisponibles: number;
   pieces?: number;
   description?: string | null;
+}
+
+interface Ambiance {
+  statut: 'EN_COURS' | 'PRET' | 'ECHEC';
+  source: 'IA' | 'MANUEL';
+  url: string | null;
+  erreur: string | null;
+}
+interface PackDetail {
+  pieces: { piece: string | null; articles: unknown[]; ambiance: Ambiance | null }[];
+  visuels: { ia: boolean; restantsCeMois: number | null };
+}
+
+/**
+ * Visuels d'aménagement des pièces d'un pack : génération Higgsfield à partir des meubles, ou image ajoutée
+ * (photo de l'appartement témoin). Ils figurent en tête de pièce sur la planche et dans l'Espace Client.
+ */
+function PackVisuals({ packId, canEdit }: { packId: string; canEdit: boolean }) {
+  const [d, setD] = useState<PackDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const target = useRef<string | null>(null);
+  const load = useCallback(
+    () =>
+      get<PackDetail>(`/bo/packs/${packId}`)
+        .then(setD)
+        .catch((e) => setError((e as Error).message)),
+    [packId],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const generating = !!d?.pieces.some((g) => g.ambiance?.statut === 'EN_COURS');
+  useEffect(() => {
+    if (!generating) return;
+    const timer = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(timer);
+  }, [generating, d, load]);
+
+  const run = async (piece: string, f: () => Promise<unknown>) => {
+    setBusy(piece);
+    setError(null);
+    try {
+      await f();
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!d) return error ? <Banner kind="error">{error}</Banner> : <p className="hint">Chargement…</p>;
+  const rooms = d.pieces.filter((g): g is typeof g & { piece: string } => g.piece !== null);
+  const q = (piece: string) => `?piece=${encodeURIComponent(piece)}`;
+  return (
+    <div className="pack-visuals">
+      <p className="hint">
+        {d.visuels.ia
+          ? `Génération par IA (Higgsfield) active · ${d.visuels.restantsCeMois ?? 0} visuel${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} encore possible${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} ce mois-ci pour ce client.`
+          : 'Génération par IA inactive : renseignez la clé Higgsfield du serveur. Vous pouvez ajouter une image à la main.'}
+      </p>
+      {error && <Banner kind="error">{error}</Banner>}
+      {!rooms.length && <p className="hint">Placez d’abord les biens dans des pièces.</p>}
+      <ul className="photo-manage">
+        {rooms.map((g) => {
+          const a = g.ambiance;
+          return (
+            <li key={g.piece}>
+              <strong>{g.piece}</strong>
+              {a?.statut === 'PRET' && a.url ? (
+                <a href={a.url} target="_blank" rel="noreferrer">
+                  <img src={a.url} alt={`Visuel : ${g.piece}`} />
+                </a>
+              ) : (
+                <span className="muted small">{a?.statut === 'EN_COURS' ? 'Génération en cours…' : a?.statut === 'ECHEC' ? `Échec : ${a.erreur ?? 'erreur inconnue'}` : 'Pas de visuel'}</span>
+              )}
+              {a?.statut === 'PRET' && <span className="muted small">{a.source === 'IA' ? 'Généré par IA' : 'Image ajoutée'}</span>}
+              {canEdit && a?.statut !== 'EN_COURS' && (
+                <span className="row">
+                  {d.visuels.ia && (
+                    <button type="button" className="link" disabled={!!busy || !d.visuels.restantsCeMois} onClick={() => void run(g.piece, () => post(`/bo/packs/${packId}/ambiances/ia`, { piece: g.piece }))}>
+                      {busy === g.piece ? '…' : 'Générer (IA)'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={!!busy}
+                    onClick={() => {
+                      target.current = g.piece;
+                      file.current?.click();
+                    }}
+                  >
+                    Image
+                  </button>
+                  {a && (
+                    <button type="button" className="link danger" disabled={!!busy} onClick={() => void run(g.piece, () => del(`/bo/packs/${packId}/ambiances${q(g.piece)}`))}>
+                      Retirer
+                    </button>
+                  )}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <input
+        ref={file}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          const piece = target.current;
+          e.target.value = '';
+          if (!f || !piece) return;
+          if (f.size > 8 * 1024 * 1024) return setError('Image trop lourde (8 Mo au maximum)');
+          void run(piece, () => api(`/bo/packs/${packId}/ambiances${q(piece)}`, { method: 'PUT', body: f, headers: { 'Content-Type': f.type || 'image/jpeg' } }));
+        }}
+      />
+    </div>
+  );
 }
 
 /** « A-000123 ; Salon » ou « A-000123 Salon » : une étiquette par ligne, suivie de sa pièce si besoin. */
@@ -37,6 +160,7 @@ export function ClientPacks({ clientId, projets, canEdit }: { clientId: string; 
   const [projetId, setProjetId] = useState('');
   const [biens, setBiens] = useState('');
   const [busy, setBusy] = useState(false);
+  const [visuals, setVisuals] = useState<string | null>(null);
 
   const load = useCallback(() => {
     get<{ items: Pack[] }>(`/bo/clients/${clientId}/packs`)
@@ -66,6 +190,9 @@ export function ClientPacks({ clientId, projets, canEdit }: { clientId: string; 
               <button type="button" className="btn small" onClick={() => void openPdf(`/bo/packs/${p.id}/planche.pdf`, `planche-${p.nom}.pdf`).catch((e) => setError((e as Error).message))}>
                 Planche (PDF)
               </button>
+              <button type="button" className="btn small" aria-expanded={visuals === p.id} onClick={() => setVisuals(visuals === p.id ? null : p.id)}>
+                Visuels des pièces
+              </button>
               {canEdit && (
                 <button
                   type="button"
@@ -84,6 +211,7 @@ export function ClientPacks({ clientId, projets, canEdit }: { clientId: string; 
                 </button>
               )}
             </span>
+            {visuals === p.id && <PackVisuals packId={p.id} canEdit={canEdit} />}
           </li>
         ))}
       </ul>
