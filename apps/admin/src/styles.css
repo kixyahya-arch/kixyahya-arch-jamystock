@@ -3024,3 +3024,23 @@ a.back {
 .link.danger {
   color: var(--danger);
 }
+.pack-visuals {
+  flex-basis: 100%;
+  margin: 8px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.pack-visuals .photo-manage {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.pack-visuals .photo-manage li {
+  padding: 0;
+}
+.pack-visuals .row {
+  gap: 4px 14px;
+  align-items: center;
+}
+.pack-visuals .row .link {
+  min-height: 0;
+}

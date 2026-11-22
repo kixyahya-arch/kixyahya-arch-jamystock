@@ -15,6 +15,8 @@ export async function createApp(config: AppConfig, db?: Database): Promise<INest
   app.use('/api/v1/me/disputes', express.raw({ type: ['image/webp', 'image/jpeg', 'image/png'], limit: '4mb' }));
   // photos jointes à une demande de collecte (PUT /collections/:id/photos/:photoId) ; le JSON de POST /collections n'est pas concerné
   app.use('/api/v1/collections', express.raw({ type: ['image/webp', 'image/jpeg', 'image/png'], limit: '4mb' }));
+  // visuel d'aménagement d'une pièce de pack ajouté à la main (PUT …/ambiances?piece=) ; le JSON des autres routes n'est pas concerné
+  app.use(['/api/v1/me/cart-templates', '/api/v1/bo/packs'], express.raw({ type: ['image/webp', 'image/jpeg', 'image/png'], limit: '8mb' }));
   // webhook Stripe : la signature porte sur le corps brut
   app.use('/api/v1/stripe/webhook', express.raw({ type: '*/*', limit: '1mb' }));
   // reprise de l'ancien logiciel : l'export CSV complet (≈ 2 000 objets avec descriptions) dépasse la limite par défaut de 100 ko

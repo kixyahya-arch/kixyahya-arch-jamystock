@@ -68,6 +68,31 @@ export class FilesController {
     res.send(data);
   }
 
+  /** Visuel d'aménagement d'une pièce de pack, par lien signé. */
+  @Public()
+  @Get('ambiances/:id')
+  async ambiance(@Param('id') id: string, @Query() query: unknown, @Res() res: Response) {
+    const ambId = z.string().uuid().parse(id);
+    const q = Q.parse(query);
+    if (!this.files.verify(q.t, ambId, 'a', q.e, q.s)) throw new BusinessError(403, 'LIEN_INVALIDE', 'Lien expiré ou invalide');
+    const key = await this.db.tx({ tenantId: q.t, role: 'SYSTEM' }, async (tx) => (await tx.query<{ cle: string }>(`SELECT cle FROM pack_ambiance WHERE id = $1 AND statut = 'PRET' AND cle IS NOT NULL`, [ambId])).rows[0]?.cle);
+    if (!key) throw notFound('Fichier');
+    let data: Buffer;
+    try {
+      data = await this.storage.get(key);
+    } catch {
+      throw notFound('Fichier');
+    }
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': `private, max-age=${Math.max(0, q.e - Math.floor(Date.now() / 1000))}`,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Cross-Origin-Resource-Policy': 'same-site',
+    });
+    res.send(data);
+  }
+
   /** Fabrique et enregistre une taille dérivée ; renvoie sa clé, ou null si l'originale n'est pas une image matricielle lisible. */
   private async variant(tenantId: string, photoId: string, original: string, size: 't' | 'm'): Promise<string | null> {
     const ext = original.split('.').pop()!.toLowerCase();

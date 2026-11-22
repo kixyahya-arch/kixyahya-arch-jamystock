@@ -5,6 +5,7 @@ import { refreshCart } from '../lib/cart';
 import { go, href } from '../lib/router';
 import type { CartTemplate, Ctx, PackDetail } from '../lib/types';
 import { Banner, Thumb } from '../components/ui';
+import { RoomVisual } from './RoomVisual';
 
 const A_REPARTIR = 'À répartir';
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
@@ -156,6 +157,13 @@ export function PackView({ id }: { id: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // un visuel en cours de génération : la page se met à jour d'elle-même
+  const generating = !!p?.pieces.some((g) => g.ambiance?.statut === 'EN_COURS');
+  useEffect(() => {
+    if (!generating) return;
+    const timer = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(timer);
+  }, [generating, p, load]);
 
   const save = async (
     body: {
@@ -282,6 +290,17 @@ export function PackView({ id }: { id: string }) {
           <h2>
             {g.piece ?? A_REPARTIR} <span className="hint">· {plural(g.articles.length, 'bien')}</span>
           </h2>
+          {g.piece && (
+            <RoomVisual
+              base={`/me/cart-templates/${id}`}
+              piece={g.piece}
+              ambiance={g.ambiance}
+              ia={p.visuels.ia}
+              restants={p.visuels.restantsCeMois}
+              modifiable={p.modifiable}
+              onChange={load}
+            />
+          )}
           {g.piece === null && p.modifiable && <p className="hint small">Indiquez la pièce de chaque bien : la planche d’aménagement les présentera pièce par pièce.</p>}
           <ul className="pack-items">
             {g.articles.map((a) => (
@@ -334,7 +353,6 @@ export function PackView({ id }: { id: string }) {
           <option key={x} value={x} />
         ))}
       </datalist>
-      <p className="hint small pack-ai">Bientôt : un visuel de chaque pièce aménagée avec vos meubles, ajouté en tête de pièce sur la planche.</p>
     </>
   );
 }

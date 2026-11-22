@@ -24,7 +24,7 @@ export class FilesService {
     this.key = createHmac('sha256', config.jwtSecret).update('jamystock:files:v1').digest();
   }
 
-  private sig(tenantId: string, photoId: string, size: PhotoSize, exp: number): string {
+  private sig(tenantId: string, photoId: string, size: PhotoSize | 'a', exp: number): string {
     return createHmac('sha256', this.key).update(`${tenantId}.${photoId}.${size}.${exp}`).digest('base64url');
   }
 
@@ -33,11 +33,17 @@ export class FilesService {
     return `/api/v1/files/photos/${photoId}/${size}?t=${tenantId}&e=${exp}&s=${this.sig(tenantId, photoId, size, exp)}`;
   }
 
+  /** Visuel d'aménagement d'une pièce de pack (table pack_ambiance). */
+  ambianceUrl(tenantId: string, id: string, now = Date.now()): string {
+    const exp = Math.ceil((now / 1000 + TTL_S) / BUCKET_S) * BUCKET_S;
+    return `/api/v1/files/ambiances/${id}?t=${tenantId}&e=${exp}&s=${this.sig(tenantId, id, 'a', exp)}`;
+  }
+
   photoUrls(tenantId: string, photoId: string) {
     return { vignette: this.photoUrl(tenantId, photoId, 't'), moyenne: this.photoUrl(tenantId, photoId, 'm'), originale: this.photoUrl(tenantId, photoId, 'o') };
   }
 
-  verify(tenantId: string, photoId: string, size: PhotoSize, exp: number, sig: string, now = Date.now()): boolean {
+  verify(tenantId: string, photoId: string, size: PhotoSize | 'a', exp: number, sig: string, now = Date.now()): boolean {
     if (!Number.isFinite(exp) || exp * 1000 < now) return false;
     const expected = Buffer.from(this.sig(tenantId, photoId, size, exp));
     const given = Buffer.from(sig);
