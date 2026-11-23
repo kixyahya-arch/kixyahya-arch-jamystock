@@ -7,6 +7,7 @@ import { DEMO_PASSWORD, seed } from './seed.js';
 import { seedDemoOrders } from './demo-orders.js';
 import { seedDemoBilling } from './demo-billing.js';
 import { seedDemoOnSite } from './demo-onsite.js';
+import { seedDemoPacks } from './demo-packs.js';
 import { bootstrapProduction } from './bootstrap.js';
 import { hashPassword } from '../auth/auth.service.js';
 
@@ -67,6 +68,7 @@ export async function provision(env: NodeJS.ProcessEnv = process.env, log: (m: s
     if (factures) log(`${factures} facture(s) de démonstration créée(s)`);
     const surSite = await seedDemoOnSite(url, env.STORAGE_DIR ?? '.storage');
     if (surSite) log(`${surSite} objet(s) de démonstration installé(s) chez le client`);
+    if (await seedDemoPacks(url, env.STORAGE_DIR ?? '.storage')) log('Pack de démonstration avec visuel d’aménagement créé');
   } else {
     await bootstrapProduction(url, env, log);
   }
