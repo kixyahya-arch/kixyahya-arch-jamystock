@@ -363,7 +363,7 @@ describe('client Pollinations', () => {
     const calls: { url: string; auth?: string }[] = [];
     const responses = [new Response('busy', { status: 429 }), image()];
     const c = new PollinationsClient(
-      { ...cfg, key: 'pk_test' },
+      { ...cfg, key: 'pk_test', timeoutMs: 60_000 },
       (async (url: string, init: RequestInit) => {
         calls.push({ url, auth: (init.headers as Record<string, string>).Authorization });
         return responses.shift()!;
@@ -374,6 +374,24 @@ describe('client Pollinations', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]!.url).toBe('https://img.example/prompt/a%20room%20with%20chairs?model=flux&width=1600&height=1000&seed=7&nologo=true&private=true');
     expect(calls[0]!.auth).toBe('Bearer pk_test');
+  });
+
+  it('attend le délai annoncé quand la limite gratuite par adresse IP est atteinte (402 FREE_LIMIT)', async () => {
+    const waits: number[] = [];
+    const limit = () =>
+      new Response(JSON.stringify({ status: 402, error: { code: 'FREE_LIMIT', message: 'Free limit reached: 1 image every 45 seconds per IP. Retry after 42s, or get unlimited images with a pollen key' } }), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const responses = [limit(), limit(), image()];
+    const c = new PollinationsClient({ ...cfg, timeoutMs: 5 * 60_000 }, (async () => responses.shift()!) as unknown as typeof fetch, async (ms) => void waits.push(ms));
+    expect((await c.generate('x')).length).toBe(3);
+    expect(waits).toHaveLength(2);
+    for (const w of waits) expect(w).toBeGreaterThanOrEqual(43_000);
+
+    // délai total dépassé : message clair, sans boucler
+    const c2 = new PollinationsClient({ ...cfg, timeoutMs: 30_000 }, (async () => limit()) as unknown as typeof fetch, async () => undefined);
+    await expect(c2.generate('x')).rejects.toThrow(/Service gratuit saturé/);
   });
 
   it('signale une clé refusée sans réessayer', async () => {

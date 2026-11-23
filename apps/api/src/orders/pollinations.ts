@@ -14,6 +14,8 @@ type Fetch = typeof fetch;
 /** Au-delà, l'adresse devient trop longue pour certains serveurs. */
 const MAX_PROMPT = 1500;
 
+const SATURE = 'Service gratuit saturé (une image toutes les 45 secondes, partagée avec d’autres sites) : réessayez dans quelques minutes, ou ajoutez une clé Pollinations (POLLINATIONS_API_KEY)';
+
 export class PollinationsClient {
   constructor(
     private readonly cfg: Cfg,
@@ -33,16 +35,24 @@ export class PollinationsClient {
     return u.toString();
   }
 
-  /** Génère l'image ; réessaie deux fois si le service est saturé (une génération à la fois sans clé). */
+  /**
+   * Génère l'image. Sans clé, Pollinations accepte une image toutes les 45 secondes par adresse IP et répond 402
+   * (FREE_LIMIT, « Retry after 42s ») ou 429 au-delà ; sur un hébergeur, l'adresse est partagée avec d'autres
+   * services : on attend le délai indiqué et on réessaie, dans la limite du délai total.
+   */
   async generate(prompt: string, seed = 1 + Math.floor(Math.random() * 999_999)): Promise<Buffer> {
     const headers: Record<string, string> = { Accept: 'image/*' };
     if (this.cfg.key) headers.Authorization = `Bearer ${this.cfg.key}`;
+    const deadline = Date.now() + this.cfg.timeoutMs;
+    let limited = false;
     for (let attempt = 1; ; attempt++) {
+      const left = deadline - Date.now();
+      if (left <= 0) throw new VisuelError(limited ? SATURE : 'Génération trop longue, abandonnée : réessayez dans un moment');
       let res: Response;
       try {
-        res = await this.fetchImpl(this.url(prompt, seed), { headers, signal: AbortSignal.timeout(this.cfg.timeoutMs) });
+        res = await this.fetchImpl(this.url(prompt, seed), { headers, signal: AbortSignal.timeout(Math.min(left, 120_000)) });
       } catch (e) {
-        if (attempt < 3) {
+        if (attempt < 3 && deadline - Date.now() > 10_000) {
           await this.sleep(5_000 * attempt);
           continue;
         }
@@ -53,13 +63,19 @@ export class PollinationsClient {
         if (buf.length > 30 * 1024 * 1024) throw new VisuelError('Image trop lourde', false);
         return buf;
       }
-      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160);
-      if (res.status === 401 || res.status === 403) throw new VisuelError(`Clé Pollinations refusée : vérifiez POLLINATIONS_API_KEY${body ? ` (${body})` : ''}`, false);
-      if ((res.status === 429 || res.status >= 500) && attempt < 3) {
-        await this.sleep(Number(res.headers.get('retry-after')) * 1000 || 10_000 * attempt);
-        continue;
+      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ');
+      if (res.status === 401 || res.status === 403) throw new VisuelError(`Clé Pollinations refusée : vérifiez POLLINATIONS_API_KEY (${body.slice(0, 160)})`, false);
+      if (res.status === 402 || res.status === 429 || res.status >= 500) {
+        limited ||= res.status === 402 || res.status === 429;
+        // délai annoncé (« Retry after 42s » ou en-tête Retry-After), sinon 10 s ; un peu d'aléa entre les essais
+        const announced = Number(res.headers.get('retry-after')) || Number(/retry after (\d+)\s*s/i.exec(body)?.[1]) || 10;
+        const wait = Math.min(announced * 1000 + 1_000 + Math.random() * 3_000, 60_000);
+        if (attempt < 10 && Date.now() + wait < deadline - 5_000) {
+          await this.sleep(wait);
+          continue;
+        }
+        if (limited) throw new VisuelError(SATURE);
       }
-      if (res.status === 429) throw new VisuelError('Service de génération gratuit saturé : réessayez dans une minute');
       if (res.ok) throw new VisuelError('Le service de génération n’a pas renvoyé d’image');
       throw new VisuelError(`Service de génération indisponible (HTTP ${res.status})`);
     }

@@ -116,7 +116,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       url: env.POLLINATIONS_URL || (env.POLLINATIONS_API_KEY ? 'https://gen.pollinations.ai/image/{prompt}' : 'https://image.pollinations.ai/prompt/{prompt}'),
       key: env.POLLINATIONS_API_KEY || undefined,
       model: env.POLLINATIONS_MODEL || 'flux',
-      timeoutMs: intOr(env.POLLINATIONS_TIMEOUT_MS, 3 * 60_000),
+      timeoutMs: intOr(env.POLLINATIONS_TIMEOUT_MS, 5 * 60_000),
     },
     higgsfield: {
       keyId: env.HIGGSFIELD_API_KEY_ID || undefined,
