@@ -2480,7 +2480,7 @@ label.inline {
 .room-visual figure {
   margin: 0;
 }
-.room-visual img {
+.room-visual figure img {
   display: block;
   width: 100%;
   max-width: 720px;
@@ -2509,6 +2509,48 @@ label.inline {
   margin-top: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+.room-kit {
+  max-width: 720px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--muted-bg);
+}
+.room-kit ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.room-kit textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  resize: vertical;
+}
+.room-kit-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.room-kit-photos a {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-decoration: none;
+}
+.room-kit-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
 }
 .spinner {
   flex: none;

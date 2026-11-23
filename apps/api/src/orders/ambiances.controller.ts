@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, Inject, Injectable, Logger, OnModuleDestroy, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Injectable, Logger, OnModuleDestroy, Param, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 import sharp from 'sharp';
@@ -167,6 +167,22 @@ export class AmbiancesService implements OnModuleDestroy {
     return this.client.download(url);
   }
 
+  /**
+   * Description de la pièce à coller dans Higgsfield (ou tout autre générateur) avec les photos des meubles :
+   * l'image produite est ensuite ajoutée à la main. Ne coûte rien et ne compte pas dans le plafond.
+   */
+  async brief(user: AuthUser, packId: string, rawPiece: string) {
+    return this.db.tx(ctxOf(user), async (tx) => {
+      const m = await this.packs.load(tx, packId);
+      const piece = this.pieceOf(m, rawPiece);
+      const ids = m.article_ids.filter((aid) => m.pieces?.[aid] === piece);
+      const all = await this.packs.articles(tx, ids);
+      const biens = ids.map((aid) => all.get(aid)).filter((a) => !!a);
+      const photos = biens.filter((a) => !!a.photo).length;
+      return { piece, prompt: ambiancePrompt({ piece, description: m.description, biens: biens.map((a) => ({ libelle: a.libelle, dimensions: dims(a) })), references: photos }) };
+    });
+  }
+
   /** Image ajoutée à la main (JPEG, PNG ou WebP, 8 Mo max) ; remplace le visuel de la pièce. */
   async upload(user: AuthUser, packId: string, rawPiece: string, req: Request) {
     const data = req.body as Buffer;
@@ -228,6 +244,13 @@ const clientOnly = (user: AuthUser) => {
 export class PackAmbiancesController {
   constructor(@Inject(AmbiancesService) private readonly ambiances: AmbiancesService) {}
 
+  @Get('brief')
+  @RequirePermission('order.create')
+  brief(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query() q: unknown) {
+    clientOnly(user);
+    return this.ambiances.brief(user, uuid.parse(id), PieceQuery.parse(q).piece);
+  }
+
   @Post('ia')
   @HttpCode(202)
   @RequirePermission('order.create')
@@ -255,6 +278,12 @@ export class PackAmbiancesController {
 @Controller('bo/packs/:id/ambiances')
 export class BoPackAmbiancesController {
   constructor(@Inject(AmbiancesService) private readonly ambiances: AmbiancesService) {}
+
+  @Get('brief')
+  @RequirePermission('client.manage')
+  brief(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query() q: unknown) {
+    return this.ambiances.brief(user, uuid.parse(id), PieceQuery.parse(q).piece);
+  }
 
   @Post('ia')
   @HttpCode(202)
