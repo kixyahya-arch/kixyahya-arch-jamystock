@@ -228,7 +228,7 @@ export function ClientView({ id }: { id: string }) {
             </section>
           )}
 
-          <ClientPacks clientId={c.id} projets={c.projets} canEdit={canEdit} />
+          {canEdit && <ClientPacks clientId={c.id} projets={c.projets} canEdit={canEdit} />}
 
           <section className="panel">
             <h2>Utilisateurs</h2>

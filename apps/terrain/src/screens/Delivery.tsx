@@ -97,7 +97,7 @@ export function Delivery({ missionId, onBack }: { missionId: string; onBack: () 
         <section className="card">
           <strong>{c.adresse?.libelle}</strong>
           <small>
-            {c.dateConfirmee} {c.creneau ?? ''}
+            {jourFr(c.dateConfirmee)} {c.creneau ?? ''}
           </small>
           {c.contraintesAcces && <AccessConstraints c={c.contraintesAcces} />}
           {c.contactSite && (
@@ -581,4 +581,11 @@ function AccessConstraints({ c }: { c: Record<string, unknown> }) {
 function navUrl(a: { libelle?: string; lat?: number; lng?: number } | null): string {
   if (a?.lat !== undefined && a?.lng !== undefined) return `https://www.google.com/maps/dir/?api=1&destination=${a.lat},${a.lng}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a?.libelle ?? '')}`;
+}
+
+/** « 2026-11-27 » → « jeudi 27 novembre » (date calendaire, sans décalage de fuseau). */
+function jourFr(d: string | null | undefined): string {
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return d ?? '';
+  const [y, m, j] = d.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, j!)).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }

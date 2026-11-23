@@ -204,6 +204,14 @@ function SiteRequest({
     contact.telephone.trim().length >= 6 &&
     (mode === 'RETOUR' || destAdresse.trim().length >= 3) &&
     (role !== 'B2B_USER' || fromProjet);
+  const manque = [
+    role === 'B2B_USER' && !fromProjet && 'le projet d’origine',
+    adresse.trim().length < 3 && 'l’adresse où les reprendre',
+    mode !== 'RETOUR' && destAdresse.trim().length < 3 && 'l’adresse de destination',
+    !date && 'la date souhaitée',
+    !contact.nom.trim() && 'le contact sur place',
+    contact.telephone.trim().length < 6 && 'son téléphone',
+  ].filter((x): x is string => !!x);
 
   const submit = async () => {
     setBusy(true);
@@ -290,6 +298,7 @@ function SiteRequest({
           {busy ? 'Envoi…' : 'Envoyer la demande'}
         </button>
       </div>
+      {manque.length > 0 && <p className="hint small">À compléter : {manque.join(', ')}.</p>}
     </section>
   );
 }

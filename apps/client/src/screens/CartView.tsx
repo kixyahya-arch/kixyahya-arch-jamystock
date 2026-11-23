@@ -59,6 +59,13 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
   const needsApproval = role === 'B2B_USER';
   const blocked = cart.lignes.some((l) => l.disponible === false);
   const ready = !blocked && date && (!delivery || (adresse.trim().length >= 3 && contact.nom.trim() && contact.telephone.trim().length >= 6));
+  // ce qui manque pour envoyer, affiché sous le bouton tant qu'il est grisé
+  const manque = [
+    !date && 'la date souhaitée',
+    delivery && adresse.trim().length < 3 && 'l’adresse de livraison',
+    delivery && !contact.nom.trim() && 'le contact sur place',
+    delivery && contact.telephone.trim().length < 6 && 'son téléphone',
+  ].filter((x): x is string => !!x);
 
   const submit = async () => {
     setBusy(true);
@@ -212,6 +219,7 @@ function Checkout({ projetId, cart, role }: { projetId: string | null; cart: Car
         <button type="button" className="btn primary big" disabled={!ready || busy} onClick={() => void submit()}>
           {busy ? 'Envoi…' : 'Envoyer la demande'}
         </button>
+        {!blocked && manque.length > 0 && <p className="hint small">À compléter : {manque.join(', ')}.</p>}
         {needsApproval && <p className="hint">Selon vos droits sur ce projet, la demande peut d’abord passer par la validation de votre administrateur.</p>}
       </section>
     </div>
