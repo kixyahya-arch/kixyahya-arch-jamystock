@@ -14,14 +14,16 @@ import { AuditService } from '../audit/audit.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { dims, PacksService, type PackRow } from './packs.controller.js';
 import { ambiancePrompt, HiggsfieldClient, HiggsfieldError } from './higgsfield.js';
+import { PollinationsClient } from './pollinations.js';
 
 /**
  * Visuels d'aménagement (compte rendu Adam du 21/11) : pour chaque pièce d'un pack, une image de la pièce meublée,
  * en tête de la pièce sur la page du pack et dans la planche PDF. Deux sources :
- *  - IA : Higgsfield génère la pièce à partir de la liste des meubles (et de leurs photos si le modèle en accepte) ;
- *    la génération tourne en tâche de fond, la page du pack se met à jour d'elle-même ;
+ *  - IA : Pollinations (gratuit) ou Higgsfield (payant) génère la pièce à partir de la liste des meubles (et, pour
+ *    Higgsfield, de leurs photos si le modèle en accepte) ; la génération tourne en tâche de fond, la page du pack
+ *    se met à jour d'elle-même ;
  *  - MANUEL : une image ajoutée à la main (photo de l'appartement témoin, rendu d'un architecte).
- * Un plafond mensuel par client et pour l'organisation protège le solde Higgsfield.
+ * Un plafond mensuel par client et pour l'organisation protège le solde Higgsfield et l'accès gratuit à Pollinations.
  */
 
 const uuid = z.string().uuid();
@@ -29,10 +31,20 @@ const PieceBody = z.object({ piece: z.string().trim().min(1).max(80) });
 const PieceQuery = z.object({ piece: z.string().trim().min(1).max(80) });
 const MAX_REFERENCES = 4;
 
+interface Job {
+  id: string;
+  m: PackRow;
+  piece: string;
+  keys: string[];
+  biens: { libelle: string; dimensions: string | null }[];
+}
+
 @Injectable()
 export class AmbiancesService implements OnModuleDestroy {
   private readonly log = new Logger('Ambiances');
   private readonly client: HiggsfieldClient;
+  private readonly pollinations: PollinationsClient;
+  private readonly fournisseur: AppConfig['visuels'];
   private readonly running = new Set<Promise<void>>();
 
   constructor(
@@ -43,6 +55,8 @@ export class AmbiancesService implements OnModuleDestroy {
     @Inject(CONFIG) config: AppConfig,
   ) {
     this.client = new HiggsfieldClient(config.higgsfield);
+    this.pollinations = new PollinationsClient(config.pollinations);
+    this.fournisseur = config.visuels;
   }
 
   /** Tests : attend la fin des générations lancées. */
@@ -76,7 +90,7 @@ export class AmbiancesService implements OnModuleDestroy {
   }
 
   async generate(user: AuthUser, packId: string, rawPiece: string) {
-    if (!this.client.enabled) throw unprocessable('IA_INACTIVE', 'La génération de visuels n’est pas encore activée : ajoutez une image à la main');
+    if (!this.fournisseur) throw unprocessable('IA_INACTIVE', 'La génération de visuels n’est pas encore activée : ajoutez une image à la main');
     const job = await this.db.tx(ctxOf(user), async (tx) => {
       const m = await this.packs.load(tx, packId, true);
       this.canEdit(user, m);
@@ -104,25 +118,11 @@ export class AmbiancesService implements OnModuleDestroy {
     return { id: job.id, piece: job.piece, statut: 'EN_COURS' as const };
   }
 
-  /** Génération en tâche de fond : photos de référence, requête, suivi, téléchargement, enregistrement. */
-  private async run(tenantId: string, job: { id: string; m: PackRow; piece: string; keys: string[]; biens: { libelle: string; dimensions: string | null }[] }) {
+  /** Génération en tâche de fond, puis enregistrement de l'image. */
+  private async run(tenantId: string, job: Job) {
     const sys = { tenantId, role: 'SYSTEM' as const };
     try {
-      const refs: string[] = [];
-      if (this.client.usesReferences) {
-        for (const k of job.keys) {
-          const jpeg = await this.storage
-            .get(k)
-            .then((b) => sharp(b, { failOn: 'none' }).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer())
-            .catch(() => null);
-          if (jpeg) refs.push(await this.client.upload(jpeg));
-        }
-      }
-      const prompt = ambiancePrompt({ piece: job.piece, description: job.m.description, biens: job.biens, references: refs.length });
-      const { requestId, statusUrl } = await this.client.submit(this.client.body(prompt, refs), job.id);
-      await this.db.tx(sys, (tx) => tx.query('UPDATE pack_ambiance SET request_id = $2 WHERE id = $1', [job.id, requestId]));
-      const url = await this.client.wait(statusUrl);
-      const raw = await this.client.download(url);
+      const raw = this.fournisseur === 'pollinations' ? await this.viaPollinations(sys, job) : await this.viaHiggsfield(sys, job);
       const jpeg = await sharp(raw, { failOn: 'none' }).resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 82 }).toBuffer();
       const key = `${tenantId}/ambiances/${job.id}.jpg`;
       await this.storage.put(key, jpeg);
@@ -139,6 +139,32 @@ export class AmbiancesService implements OnModuleDestroy {
         .tx(sys, (tx) => tx.query(`UPDATE pack_ambiance SET statut = 'ECHEC', erreur = $2, termine_le = now() WHERE id = $1 AND statut = 'EN_COURS'`, [job.id, msg.slice(0, 300)]))
         .catch(() => undefined);
     }
+  }
+
+  /** Pollinations : la description des meubles suffit, l'image revient directement. */
+  private async viaPollinations(sys: { tenantId: string; role: 'SYSTEM' }, job: Job): Promise<Buffer> {
+    const prompt = ambiancePrompt({ piece: job.piece, description: job.m.description, biens: job.biens, references: 0, court: true });
+    await this.db.tx(sys, (tx) => tx.query('UPDATE pack_ambiance SET request_id = $2 WHERE id = $1', [job.id, 'pollinations']));
+    return this.pollinations.generate(prompt);
+  }
+
+  /** Higgsfield : photos de référence, requête, suivi, téléchargement. */
+  private async viaHiggsfield(sys: { tenantId: string; role: 'SYSTEM' }, job: Job): Promise<Buffer> {
+    const refs: string[] = [];
+    if (this.client.usesReferences) {
+      for (const k of job.keys) {
+        const jpeg = await this.storage
+          .get(k)
+          .then((b) => sharp(b, { failOn: 'none' }).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 85 }).toBuffer())
+          .catch(() => null);
+        if (jpeg) refs.push(await this.client.upload(jpeg));
+      }
+    }
+    const prompt = ambiancePrompt({ piece: job.piece, description: job.m.description, biens: job.biens, references: refs.length });
+    const { requestId, statusUrl } = await this.client.submit(this.client.body(prompt, refs), job.id);
+    await this.db.tx(sys, (tx) => tx.query('UPDATE pack_ambiance SET request_id = $2 WHERE id = $1', [job.id, requestId]));
+    const url = await this.client.wait(statusUrl);
+    return this.client.download(url);
   }
 
   /** Image ajoutée à la main (JPEG, PNG ou WebP, 8 Mo max) ; remplace le visuel de la pièce. */

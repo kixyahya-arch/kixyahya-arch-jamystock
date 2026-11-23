@@ -24,7 +24,7 @@ interface PackDetail {
 }
 
 /**
- * Visuels d'aménagement des pièces d'un pack : génération Higgsfield à partir des meubles, ou image ajoutée
+ * Visuels d'aménagement des pièces d'un pack : génération par IA (Pollinations ou Higgsfield) à partir des meubles, ou image ajoutée
  * (photo de l'appartement témoin). Ils figurent en tête de pièce sur la planche et dans l'Espace Client.
  */
 function PackVisuals({ packId, canEdit }: { packId: string; canEdit: boolean }) {
@@ -69,8 +69,8 @@ function PackVisuals({ packId, canEdit }: { packId: string; canEdit: boolean }) 
     <div className="pack-visuals">
       <p className="hint">
         {d.visuels.ia
-          ? `Génération par IA (Higgsfield) active · ${d.visuels.restantsCeMois ?? 0} visuel${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} encore possible${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} ce mois-ci pour ce client.`
-          : 'Génération par IA inactive : renseignez la clé Higgsfield du serveur. Vous pouvez ajouter une image à la main.'}
+          ? `Génération par IA active · ${d.visuels.restantsCeMois ?? 0} visuel${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} encore possible${(d.visuels.restantsCeMois ?? 0) > 1 ? 's' : ''} ce mois-ci pour ce client.`
+          : 'Génération par IA inactive (VISUELS_IA=off sur le serveur). Vous pouvez ajouter une image à la main.'}
       </p>
       {error && <Banner kind="error">{error}</Banner>}
       {!rooms.length && <p className="hint">Placez d’abord les biens dans des pièces.</p>}

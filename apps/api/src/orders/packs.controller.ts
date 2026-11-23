@@ -170,7 +170,7 @@ export class PacksService {
       `SELECT DISTINCT ON (piece) id, piece, source, statut, cle, erreur, created_at FROM pack_ambiance WHERE pack_id = $1 ORDER BY piece, created_at DESC, id DESC`,
       [packId],
     );
-    const stale = Date.now() - this.config.higgsfield.timeoutMs - 3 * 60_000;
+    const stale = Date.now() - Math.max(this.config.higgsfield.timeoutMs, this.config.pollinations.timeoutMs) - 3 * 60_000;
     const out = new Map<string, AmbianceView>();
     for (const a of r.rows) {
       if (a.statut === 'SUPPRIME') continue;
@@ -210,7 +210,7 @@ export class PacksService {
   }
 
   get iaActive(): boolean {
-    return !!(this.config.higgsfield.keyId && this.config.higgsfield.keySecret);
+    return this.config.visuels !== null;
   }
 
   async load(tx: Tx, id: string, forUpdate = false): Promise<PackRow> {

@@ -191,25 +191,112 @@ export function pieceEnglish(piece: string): string {
 
 const PRO = new Set(['Accueil', 'Espace de vente', 'Bureau']);
 
+/** Limite de mot qui tient compte des lettres accentuées (\b de JavaScript s'arrête aux lettres ASCII). */
+const B = '(?:(?<![\\p{L}\\d])(?=[\\p{L}\\d])|(?<=[\\p{L}\\d])(?![\\p{L}\\d]))';
+const ub = (list: [RegExp, string][]): [RegExp, string][] => list.map(([re, en]) => [new RegExp(re.source.replace(/\\b/g, B), 'u'), en]);
+
+/** Vocabulaire courant du mobilier, du plus précis au plus général : les modèles comprennent mal le français. */
+const MEUBLES_EN = ub([
+  [/\bbanque d['’]accueil\b/, 'reception desk'],
+  [/\btable basse\b/, 'coffee table'],
+  [/\btable de (réunion|reunion)\b/, 'meeting table'],
+  [/\btable à manger\b|\btable de salle à manger\b/, 'dining table'],
+  [/\btable de chevet\b|\bchevet\b/, 'bedside table'],
+  [/\bmeuble (tv|télé)\b/, 'TV stand'],
+  [/\bmeuble\b/, 'cabinet'],
+  [/\btotem( plv)?\b/, 'tall freestanding advertising display totem'],
+  [/\bkakemono\b|\broll[- ]?up\b/, 'roll-up banner stand'],
+  [/\bplv\b/, 'point-of-sale display'],
+  [/\bcanapé d['’]angle\b/, 'corner sofa'],
+  [/\bcanapé\b/, 'sofa'],
+  [/\bfauteuil\b/, 'armchair'],
+  [/\bchaise\b/, 'chair'],
+  [/\btabouret( de bar)?\b/, 'bar stool'],
+  [/\bpouf\b/, 'pouf'],
+  [/\bbanquette\b/, 'bench seat'],
+  [/\bbureau\b/, 'desk'],
+  [/\bcomptoir\b/, 'counter'],
+  [/\btable\b/, 'table'],
+  [/\blit\b/, 'bed'],
+  [/\bmatelas\b/, 'mattress'],
+  [/\barmoire\b|\bpenderie\b/, 'wardrobe'],
+  [/\bcommode\b/, 'chest of drawers'],
+  [/\bbuffet\b|\bbahut\b/, 'sideboard'],
+  [/\bbibliothèque\b/, 'bookcase'],
+  [/\bétagère\b/, 'shelving unit'],
+  [/\bvitrine\b/, 'display cabinet'],
+  [/\bcaisson\b/, 'drawer pedestal'],
+  [/\blampadaire\b/, 'floor lamp'],
+  [/\blampe\b|\bluminaire\b|\bsuspension\b/, 'lamp'],
+  [/\btapis\b/, 'rug'],
+  [/\bmiroir\b/, 'mirror'],
+  [/\bplante\b/, 'potted plant'],
+  [/\bécran\b|\btélévision\b|\btv\b/, 'screen'],
+  [/\btableau\b|\bcadre\b/, 'framed picture'],
+  [/\brideau(x)?\b/, 'curtains'],
+]);
+const QUALIFS_EN = ub([
+  [/\bgrise?s?\b/, 'grey'],
+  [/\bnoire?s?\b/, 'black'],
+  [/\bblanc(he)?s?\b/, 'white'],
+  [/\bbleue?s?\b/, 'blue'],
+  [/\bverte?s?\b/, 'green'],
+  [/\brouges?\b/, 'red'],
+  [/\bbois\b|\bchêne\b/, 'wooden'],
+  [/\bcuir\b/, 'leather'],
+  [/\bvelours\b/, 'velvet'],
+  [/\bvisiteurs?\b/, 'visitor'],
+  [/\bclients?\b/, 'client'],
+  [/\b(de )?(réunion|reunion)\b/, 'meeting'],
+  [/\bd['’]accueil\b/, 'reception'],
+  [/\bde bureau\b/, 'office'],
+  [/\bdouble\b|\b2 places\b/, 'double'],
+  [/\b3 places\b/, 'three-seater'],
+]);
+
+/** « Chaise visiteur » → « visitor chair » ; un nom inconnu reste tel quel. */
+export function meubleEnglish(libelle: string): string {
+  const l = libelle.toLowerCase();
+  const nom = MEUBLES_EN.find(([re]) => re.test(l));
+  if (!nom) return libelle;
+  const qualifs = QUALIFS_EN.filter(([re]) => re.test(l.replace(nom[0], ' '))).map(([, en]) => en);
+  return [...new Set(qualifs)].concat(nom[1]).join(' ');
+}
+
 /**
  * Prompt en anglais (mieux suivi par les modèles) : la pièce, ses meubles regroupés (« Chaise visiteur 5 » et
- * « Chaise visiteur 6 » deviennent « 2 × Chaise visiteur »), leurs dimensions, la description du pack.
+ * « Chaise visiteur 6 » deviennent « 2 × visitor chair »), leurs dimensions, la description du pack. La version
+ * courte, pour les modèles gratuits, garde l'essentiel en une phrase.
  */
-export function ambiancePrompt(p: { piece: string; description: string | null; biens: { libelle: string; dimensions: string | null }[]; references: number }): string {
+export function ambiancePrompt(p: { piece: string; description: string | null; biens: { libelle: string; dimensions: string | null }[]; references: number; court?: boolean }): string {
   const groups = new Map<string, { n: number; dimensions: string | null }>();
   for (const b of p.biens.slice(0, 40)) {
-    const name = b.libelle.replace(/\s+(n°\s*)?\d+$/i, '').trim() || b.libelle;
+    const name = meubleEnglish(b.libelle.replace(/\s+(n°\s*)?\d+$/i, '').trim() || b.libelle);
     const key = `${name}|${b.dimensions ?? ''}`;
     const g = groups.get(key);
     if (g) g.n++;
     else groups.set(key, { n: 1, dimensions: b.dimensions });
   }
+  const metres = (d: string) => d.replace(/,/g, '.').replace(/ m$/, ' m');
+  const base = p.piece.replace(/\s+\d+$/, '');
+  const setting = PRO.has(base) ? 'in a French real-estate sales office' : 'in a French apartment staged as a show flat';
+  if (p.court) {
+    const items = [...groups]
+      .slice(0, 12)
+      .map(([k, g]) => `${g.n > 1 ? `${g.n} ` : 'one '}${k.split('|')[0]}${g.n > 1 ? 's' : ''}${g.dimensions ? ` (${metres(g.dimensions)})` : ''}`)
+      .join(', ');
+    return [
+      `Photorealistic wide-angle interior photograph of a ${pieceEnglish(p.piece)} ${setting}, furnished only with ${items}.`,
+      p.description ? `Context: ${p.description.slice(0, 160)}.` : '',
+      `Minimal uncluttered space, natural daylight, neutral walls and floor, realistic scale, no people, no text.`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
   const list = [...groups]
     .slice(0, 20)
     .map(([k, g]) => `- ${g.n > 1 ? `${g.n} × ` : ''}${k.split('|')[0]}${g.dimensions ? ` (${g.dimensions.replace(/,/g, '.').replace(/ m$/, ' metres')})` : ''}`)
     .join('\n');
-  const base = p.piece.replace(/\s+\d+$/, '');
-  const setting = PRO.has(base) ? 'in a French real-estate sales office' : 'in a French apartment staged as a show flat';
   return [
     `Photorealistic interior design photograph of a furnished ${pieceEnglish(p.piece)} ${setting}.`,
     `The room contains exactly these pieces of furniture, nothing else of importance:`,

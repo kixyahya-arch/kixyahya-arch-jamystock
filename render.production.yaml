@@ -46,7 +46,7 @@ services:
       # E-mails (invitations, confirmations) et paiement en ligne, à renseigner dans le tableau de bord
       - key: BREVO_API_KEY
         sync: false
-      # Visuels d'aménagement des packs par IA (Higgsfield) : sans clé, seule l'image ajoutée à la main est proposée
+      # Visuels d'aménagement des packs par IA : Pollinations (gratuit) par défaut ; Higgsfield (payant) avec ses clés et VISUELS_IA=higgsfield
       - key: HIGGSFIELD_API_KEY_ID
         sync: false
       - key: HIGGSFIELD_API_KEY_SECRET
