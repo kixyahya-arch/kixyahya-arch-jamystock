@@ -28,6 +28,19 @@ interface Status {
   images?: { url?: string }[];
 }
 
+/** Message d'erreur renvoyé par Higgsfield (`detail`, ou le texte brut), raccourci. */
+async function detailOf(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  let detail: unknown = text;
+  try {
+    const j = JSON.parse(text) as { detail?: unknown; message?: unknown; error?: unknown };
+    detail = j.detail ?? j.message ?? j.error ?? text;
+  } catch {
+    /* corps non JSON */
+  }
+  return (typeof detail === 'string' ? detail : JSON.stringify(detail)).replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
 const TERMINAL = new Set(['completed', 'failed', 'nsfw', 'canceled', 'cancelled']);
 
 export class HiggsfieldClient {
@@ -49,15 +62,19 @@ export class HiggsfieldClient {
     return { Authorization: `Key ${this.cfg.keyId}:${this.cfg.keySecret}` };
   }
 
+  /**
+   * Codes d'erreur documentés par Higgsfield (docs/concepts/errors) : 401 identifiants invalides, 403 solde
+   * insuffisant, 404 modèle inconnu pour ce compte, 400/422 paramètres refusés. Le corps est `{"detail": "..."}`.
+   */
   private async json<T>(res: Response, what: string): Promise<T> {
-    if (res.status === 401 || res.status === 403) throw new HiggsfieldError('Clé Higgsfield refusée : vérifiez HIGGSFIELD_API_KEY_ID et HIGGSFIELD_API_KEY_SECRET', false);
-    if (res.status === 402) throw new HiggsfieldError('Solde Higgsfield insuffisant', false);
-    if (res.status === 422 || res.status === 400) {
-      const body = await res.text().catch(() => '');
-      throw new HiggsfieldError(`Requête refusée par Higgsfield (${what}) : ${body.slice(0, 160)}`, false);
-    }
-    if (!res.ok) throw new HiggsfieldError(`Higgsfield indisponible (${what}, HTTP ${res.status})`);
-    return (await res.json()) as T;
+    if (res.ok) return (await res.json()) as T;
+    const detail = await detailOf(res);
+    const d = detail ? ` (Higgsfield : « ${detail} »)` : '';
+    if (res.status === 401) throw new HiggsfieldError(`Clé Higgsfield refusée : vérifiez HIGGSFIELD_API_KEY_ID et HIGGSFIELD_API_KEY_SECRET${d}`, false);
+    if (res.status === 402 || res.status === 403) throw new HiggsfieldError(`Solde API Higgsfield insuffisant : ajoutez des crédits sur console.higgsfield.ai${d}`, false);
+    if (res.status === 404) throw new HiggsfieldError(`Modèle « ${this.cfg.model} » introuvable chez Higgsfield : vérifiez HIGGSFIELD_MODEL${d}`, false);
+    if (res.status === 422 || res.status === 400) throw new HiggsfieldError(`Requête refusée par Higgsfield (${what})${d}`, false);
+    throw new HiggsfieldError(`Higgsfield indisponible (${what}, HTTP ${res.status})${d}`);
   }
 
   /** Dépose une photo chez Higgsfield et renvoie son adresse publique, à passer au modèle. */

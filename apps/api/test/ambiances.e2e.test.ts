@@ -14,7 +14,7 @@ import { ambiancePrompt, pieceEnglish } from '../src/orders/higgsfield.js';
  * documentée : dépôt signé, file d'attente, suivi, image), image ajoutée à la main, plafond mensuel.
  */
 
-type Mode = 'ok' | 'nsfw' | 'refus';
+type Mode = 'ok' | 'nsfw' | 'refus' | 'solde';
 const fake = {
   mode: 'ok' as Mode,
   base: '',
@@ -45,6 +45,7 @@ const server = http.createServer((req, res) => {
     if (req.method === 'POST' && url === '/test/interieur') {
       if (req.headers.authorization !== 'Key test-id:test-secret') return json(401, { detail: 'bad key' });
       if (fake.mode === 'refus') return json(422, { detail: 'image_urls: invalid' });
+      if (fake.mode === 'solde') return json(403, { detail: 'Insufficient balance' });
       const body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
       fake.submits.push({ headers: req.headers, body });
       const id = `req-${fake.submits.length}`;
@@ -273,6 +274,15 @@ describe('visuels des pièces d’un pack', () => {
     fake.mode = 'ok';
     const d = await get(u().b2bAdmin.email, `/me/cart-templates/${r.body.id}`);
     expect(piecesOf(d).get('Bureau')).toMatchObject({ statut: 'ECHEC', erreur: expect.stringContaining('Requête refusée par Higgsfield') });
+    expect(piecesOf(d).get('Bureau')?.erreur).toContain('image_urls: invalid');
+
+    // 403 : solde API épuisé, distinct d'une clé invalide (401)
+    fake.mode = 'solde';
+    expect((await post(u().b2bAdmin.email, `/me/cart-templates/${r.body.id}/ambiances/ia`, { piece: 'Bureau' })).status).toBe(202);
+    await ambiances.idle();
+    fake.mode = 'ok';
+    const s2 = await get(u().b2bAdmin.email, `/me/cart-templates/${r.body.id}`);
+    expect(piecesOf(s2).get('Bureau')?.erreur).toMatch(/^Solde API Higgsfield insuffisant.*Insufficient balance/);
   });
 
   it('sans clé Higgsfield, la génération est désactivée et l’image à la main reste possible', async () => {
