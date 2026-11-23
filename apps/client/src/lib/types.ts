@@ -278,6 +278,8 @@ export interface PackArticle {
   statut: string | null;
   projet: string | null;
   dimensions: string | null;
+  /** en mètres (vue 3D) */
+  mesures: { longueur: number; largeur: number; hauteur: number | null } | null;
   piece: string | null;
   indisponible: string | null;
   vignette: string | null;

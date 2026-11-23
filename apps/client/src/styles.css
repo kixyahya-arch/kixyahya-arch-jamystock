@@ -2351,9 +2351,52 @@ label.inline {
 .pack-room {
   margin: 0 0 28px;
 }
-.pack-room h2 {
+.pack-room-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
   border-bottom: 2px solid var(--vert);
   padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+.pack-room-head h2 {
+  margin: 0;
+}
+.room-3d {
+  margin: 0 0 16px;
+}
+.room-3d-canvas {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  min-height: 260px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--muted-bg);
+  touch-action: none;
+}
+.room-3d-canvas canvas {
+  display: block;
+}
+.room-3d-tip {
+  position: absolute;
+  transform: translate(12px, -110%);
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.82rem;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-3d figcaption {
+  margin-top: 6px;
+  max-width: 900px;
 }
 .pack-items {
   list-style: none;

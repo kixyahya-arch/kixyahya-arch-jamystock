@@ -6,6 +6,7 @@ import { go, href } from '../lib/router';
 import type { CartTemplate, Ctx, PackDetail } from '../lib/types';
 import { Banner, Thumb } from '../components/ui';
 import { RoomVisual } from './RoomVisual';
+import { Room3D } from './Room3D';
 
 const A_REPARTIR = 'À répartir';
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
@@ -146,6 +147,7 @@ export function PackView({ id }: { id: string }) {
   } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [vue3d, setVue3d] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -287,9 +289,17 @@ export function PackView({ id }: { id: string }) {
       {empty && <p className="empty">Ce pack est vide : ajoutez des biens ci-dessous.</p>}
       {p.pieces.map((g) => (
         <section key={g.piece ?? '—'} className="pack-room">
-          <h2>
-            {g.piece ?? A_REPARTIR} <span className="hint">· {plural(g.articles.length, 'bien')}</span>
-          </h2>
+          <div className="pack-room-head">
+            <h2>
+              {g.piece ?? A_REPARTIR} <span className="hint">· {plural(g.articles.length, 'bien')}</span>
+            </h2>
+            {g.piece && (
+              <button type="button" className="btn secondary small" aria-expanded={vue3d === g.piece} onClick={() => setVue3d(vue3d === g.piece ? null : g.piece)}>
+                {vue3d === g.piece ? 'Fermer la vue 3D' : 'Voir en 3D'}
+              </button>
+            )}
+          </div>
+          {g.piece && vue3d === g.piece && <Room3D piece={g.piece} articles={g.articles} />}
           {g.piece && (
             <RoomVisual
               base={`/me/cart-templates/${id}`}
