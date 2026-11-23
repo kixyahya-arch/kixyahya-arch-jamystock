@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PIECES } from '../lib/pieces';
-import { apiBlob, del, get, post, put, saveBlob } from '../lib/api';
+import { api, apiBlob, del, get, post, put, saveBlob } from '../lib/api';
 import { refreshCart } from '../lib/cart';
 import { go, href } from '../lib/router';
 import type { CartTemplate, Ctx, PackDetail } from '../lib/types';
@@ -299,7 +299,20 @@ export function PackView({ id }: { id: string }) {
               </button>
             )}
           </div>
-          {g.piece && vue3d === g.piece && <Room3D piece={g.piece} articles={g.articles} />}
+          {g.piece && vue3d === g.piece && (
+            <Room3D
+              piece={g.piece}
+              articles={g.articles}
+              onCapture={
+                p.modifiable
+                  ? async (image) => {
+                      await api(`/me/cart-templates/${id}/ambiances?piece=${encodeURIComponent(g.piece!)}`, { method: 'PUT', body: image, headers: { 'Content-Type': 'image/jpeg' } });
+                      await load();
+                    }
+                  : undefined
+              }
+            />
+          )}
           {g.piece && (
             <RoomVisual
               base={`/me/cart-templates/${id}`}

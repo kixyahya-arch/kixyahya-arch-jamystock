@@ -7,10 +7,12 @@ import type { PackArticle } from '../lib/types';
  * dans une pièce au quadrillage d'un mètre. On tourne autour à la souris ou au doigt. Three.js n'est chargé
  * qu'à l'ouverture de la vue.
  */
-export function Room3D({ piece, articles }: { piece: string; articles: PackArticle[] }) {
+export function Room3D({ piece, articles, onCapture }: { piece: string; articles: PackArticle[]; /** enregistre la vue comme visuel de la pièce */ onCapture?: (image: Blob) => Promise<void> }) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<{ text: string; x: number; y: number } | null>(null);
+  const capture = useRef<(() => Promise<Blob | null>) | null>(null);
+  const [saving, setSaving] = useState<'idle' | 'busy' | 'done'>('idle');
   const layout = layoutRoom(articles);
   const estimees = layout.items.filter((i) => i.estimee).length;
 
@@ -32,7 +34,7 @@ export function Room3D({ piece, articles }: { piece: string; articles: PackArtic
       if (disposed) return;
       let renderer: InstanceType<typeof THREE.WebGLRenderer>;
       try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
       } catch {
         setError('Votre navigateur n’affiche pas la 3D (WebGL désactivé).');
         return;
@@ -156,6 +158,30 @@ export function Room3D({ piece, articles }: { piece: string; articles: PackArtic
       ro.observe(el);
       resize();
       controls.addEventListener('change', render);
+      // la vue courante, en grand format (celui du cadre « ambiance » de la planche, 1600 × 998)
+      capture.current = () =>
+        new Promise<Blob | null>((resolve) => {
+          const w = el.clientWidth;
+          const h = renderer.domElement.clientHeight;
+          const ratio = renderer.getPixelRatio();
+          renderer.setPixelRatio(1);
+          renderer.setSize(1600, 998, false);
+          camera.aspect = 1600 / 998;
+          camera.updateProjectionMatrix();
+          renderer.render(scene, camera);
+          renderer.domElement.toBlob(
+            (b) => {
+              renderer.setPixelRatio(ratio);
+              renderer.setSize(w, h);
+              camera.aspect = w / h;
+              camera.updateProjectionMatrix();
+              render();
+              resolve(b);
+            },
+            'image/jpeg',
+            0.9,
+          );
+        });
 
       // nom du meuble survolé (ou touché)
       const ray = new THREE.Raycaster();
@@ -173,6 +199,7 @@ export function Room3D({ piece, articles }: { piece: string; articles: PackArtic
       renderer.domElement.addEventListener('pointerleave', leave);
 
       cleanup = () => {
+        capture.current = null;
         ro.disconnect();
         controls.dispose();
         renderer.domElement.removeEventListener('pointermove', pick);
@@ -206,6 +233,30 @@ export function Room3D({ piece, articles }: { piece: string; articles: PackArtic
           </span>
         )}
       </div>
+      {onCapture && !error && (
+        <div className="row-actions room-3d-actions">
+          <button
+            type="button"
+            className="btn secondary small"
+            disabled={saving === 'busy'}
+            onClick={async () => {
+              const blob = await capture.current?.();
+              if (!blob) return setError('La vue n’a pas pu être enregistrée.');
+              setSaving('busy');
+              try {
+                await onCapture(blob);
+                setSaving('done');
+              } catch (e) {
+                setError((e as Error).message);
+                setSaving('idle');
+              }
+            }}
+          >
+            {saving === 'busy' ? 'Enregistrement…' : 'Utiliser cette vue comme visuel de la pièce'}
+          </button>
+          {saving === 'done' && <span className="hint small" role="status">Vue enregistrée : elle figure en tête de pièce et sur la planche.</span>}
+        </div>
+      )}
       {error ? (
         <p className="small warn-text">{error}</p>
       ) : (

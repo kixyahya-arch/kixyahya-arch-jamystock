@@ -13,7 +13,7 @@ import { conflict, forbidden, notFound, unprocessable } from '../common/errors.j
 import { AuditService } from '../audit/audit.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { FilesService } from '../files/files.service.js';
-import { PIECE_A_REPARTIR, planchePdf } from '../billing/pdf.js';
+import { PIECE_A_REPARTIR, PLANCHE_AMBIANCE, planchePdf } from '../billing/pdf.js';
 import { OrdersService } from './orders.service.js';
 
 /**
@@ -320,7 +320,7 @@ export class PacksService {
     };
   }
 
-  /** Planche d'aménagement en PDF : les photos sont relues en JPEG 4:3, une à la fois (petit serveur). */
+  /** Planche d'aménagement en PDF : les photos sont relues en JPEG, une à la fois (petit serveur). */
   async planche(user: AuthUser, id: string): Promise<{ name: string; data: Buffer }> {
     const job = await this.db.tx(ctxOf(user), async (tx) => {
       const m = await this.load(tx, id);
@@ -346,7 +346,8 @@ export class PacksService {
         const photo = key
           ? await this.storage
               .get(key)
-              .then((b) => sharp(b, { failOn: 'none' }).rotate().resize(480, 360, { fit: 'cover' }).flatten({ background: '#ffffff' }).jpeg({ quality: 72 }).toBuffer())
+              // meuble entier, sur fond blanc (planche de décoration)
+              .then((b) => sharp(b, { failOn: 'none' }).rotate().flatten({ background: '#ffffff' }).resize(640, 640, { fit: 'contain', background: '#ffffff' }).jpeg({ quality: 78 }).toBuffer())
               .catch(() => null)
           : null;
         biens.push({ libelle: a.libelle, qr: a.qr, dimensions: dims(a), statut: `${STATUT[a.statut] ?? a.statut}${a.projet ? ` · ${a.projet}` : ''}`, photo });
@@ -355,7 +356,7 @@ export class PacksService {
       const ambiance = ambKey
         ? await this.storage
             .get(ambKey)
-            .then((b) => sharp(b, { failOn: 'none' }).resize(1400, 1050, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 80 }).toBuffer())
+            .then((b) => sharp(b, { failOn: 'none' }).resize(PLANCHE_AMBIANCE.width, PLANCHE_AMBIANCE.height, { fit: 'cover' }).flatten({ background: '#ffffff' }).jpeg({ quality: 80 }).toBuffer())
             .catch(() => null)
         : null;
       pieces.push({ nom: g.piece ?? PIECE_A_REPARTIR, ambiance, biens });

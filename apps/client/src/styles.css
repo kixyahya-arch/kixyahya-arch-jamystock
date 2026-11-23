@@ -2394,6 +2394,9 @@ label.inline {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.room-3d-actions {
+  margin-top: 8px;
+}
 .room-3d figcaption {
   margin-top: 6px;
   max-width: 900px;
