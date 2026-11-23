@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
+import { degrees, PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import { formatEuros } from '@jamystock/domain';
 import { BRAND, drawBrandRule, drawBrandSymbol } from '../common/brand-pdf.js';
 import { embedArchiveFonts, markPdfA } from './pdfa.js';
@@ -550,83 +550,197 @@ export interface PlanchePdfData {
   }[];
 }
 
+const A3_PAYSAGE: [number, number] = [1190.55, 841.89];
+/** format du grand cadre « ambiance » de la planche (60 % de la zone utile) : le visuel y est recadré avant l'envoi */
+export const PLANCHE_AMBIANCE = { width: 1600, height: Math.round(1600 / ((A3_PAYSAGE[0] - 58 - 36) / (A3_PAYSAGE[1] - 30 - 128))) };
+
 /**
- * Planche d'aménagement : les meubles du pack regroupés par pièce, en photos. Chaque pièce peut recevoir un visuel
- * d'ambiance au-dessus de ses meubles (généré plus tard par IA, ou une photo de l'appartement témoin).
+ * Planche de décoration, sur le modèle remis par Adam (planche « Ambiance & vue 3D » d'un décorateur) : A3 paysage,
+ * une page par pièce. Le visuel de la pièce aménagée occupe le grand cadre en haut à gauche ; les meubles sont
+ * disposés autour, chacun détouré sur fond blanc avec son nom et ses dimensions. En bas, deux cartouches : la
+ * pièce, et le projet (pack, site, client, date). Une page de garde ouvre la planche. Une pièce sans visuel
+ * montre ses meubles seuls ; au-delà de huit meubles, la pièce continue sur une page « suite ».
  */
 export async function planchePdf(d: PlanchePdfData): Promise<Buffer> {
   const w = await open(`Planche d'aménagement ${d.pack}`, `${d.emetteur} · planche d'aménagement « ${d.pack} » · ${dateFr(d.genereLe)}`);
-  const right = A4[0] - M;
-  drawBrandSymbol(w.page, M + 2, w.y + 17, 24);
-  w.text(d.emetteur, M + 26, w.y, { size: 15, font: w.bold });
-  w.text("PLANCHE D'AMÉNAGEMENT", right, w.y, { size: 12, font: w.bold, align: 'right' });
-  w.y -= 30;
-  w.para(d.pack, { size: 17, font: w.bold, gap: 2 });
-  w.para([d.client, d.site].filter(Boolean).join(' · '), { size: 10, color: MUTED, gap: 2 });
+  w.doc.removePage(0);
+  w.pages.length = 0;
+  const [PW, PH] = A3_PAYSAGE;
+  const MX = 36;
+  const right = PW - 58; // bande du texte vertical à droite
+  const top = PH - 30;
+  const bottom = 128; // au-dessus des cartouches
+  const GAP = 16;
   const total = d.pieces.reduce((t, p) => t + p.biens.length, 0);
   const nommees = d.pieces.filter((p) => p.nom !== PIECE_A_REPARTIR).length;
-  w.para(`${total} bien${total > 1 ? 's' : ''}${nommees ? ` · ${nommees} pièce${nommees > 1 ? 's' : ''}` : ''} · établie le ${dateFr(d.genereLe)}`, { size: 9, color: MUTED, gap: 6 });
-  if (d.description) w.para(d.description, { size: 9.5, gap: 6 });
-  w.rule();
-  w.y -= 18;
+  const WHITE = rgb(1, 1, 1);
 
-  const COLS = 3;
-  const GAP = 12;
-  const cardW = (right - M - GAP * (COLS - 1)) / COLS;
-  const photoH = Math.round(cardW * 0.75);
-  const cardH = photoH + 44;
+  const newPage = () => {
+    w.page = w.doc.addPage(A3_PAYSAGE);
+    w.pages.push(w.page);
+    drawBrandRule(w.page, 0, PH - 6, PW, 6);
+    return w.page;
+  };
+  // une image n'est incorporée qu'une fois (le visuel de la page de garde est celui d'une pièce)
+  const embedded = new Map<Buffer, PDFImage | null>();
+  const image = async (buf: Buffer | null | undefined): Promise<PDFImage | null> => {
+    if (!buf) return null;
+    if (!embedded.has(buf)) embedded.set(buf, await w.doc.embedJpg(buf).catch(() => null));
+    return embedded.get(buf)!;
+  };
+  /** image contenue dans le cadre, centrée */
+  const contain = (img: PDFImage, x: number, y: number, bw: number, bh: number) => {
+    const k = Math.min(bw / img.width, bh / img.height);
+    w.page.drawImage(img, { x: x + (bw - img.width * k) / 2, y: y + (bh - img.height * k) / 2, width: img.width * k, height: img.height * k });
+  };
+  /** crochets d'angle, comme les cartouches du modèle */
+  const brackets = (x: number, y: number, bw: number, bh: number) => {
+    const t = 10;
+    const line = (x1: number, y1: number, x2: number, y2: number) => w.page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1, color: INK });
+    line(x, y, x, y + bh);
+    line(x, y + bh, x + t, y + bh);
+    line(x, y, x + t, y);
+    line(x + bw, y, x + bw, y + bh);
+    line(x + bw, y + bh, x + bw - t, y + bh);
+    line(x + bw, y, x + bw - t, y);
+  };
+  const centered = (text: string, cx: number, y: number, o: { size: number; font?: PDFFont; color?: ReturnType<typeof rgb> }) =>
+    w.text(text, cx - w.width(text, o.size, o.font) / 2, y, o);
+  const projet = [d.client, d.site].filter(Boolean).join(' · ');
+
+  const chrome = (piece: string, sousTitre: string) => {
+    // logo et organisation, en bas à gauche
+    drawBrandSymbol(w.page, MX, 98, 46);
+    w.text(d.emetteur, MX + 44, 66, { size: 13, font: w.bold });
+    w.text('Mobilier & décoration', MX + 44, 50, { size: 9, color: MUTED });
+    // cartouche de la pièce
+    const c1x = 420;
+    const c1w = 300;
+    brackets(c1x, 44, c1w, 62);
+    centered(piece.toUpperCase(), c1x + c1w / 2, 88, { size: 11, font: w.bold });
+    centered(sousTitre, c1x + c1w / 2, 72, { size: 9 });
+    centered('Mobilier & décoration', c1x + c1w / 2, 54, { size: 8.5, color: MUTED });
+    // cartouche du projet
+    const c2x = 750;
+    const c2w = right - c2x;
+    brackets(c2x, 44, c2w, 62);
+    const cut = (t: string, size: number, font?: PDFFont) => {
+      let out = t;
+      while (out.length > 4 && w.width(out, size, font) > c2w - 24) out = `${out.slice(0, -2)}…`;
+      return out;
+    };
+    centered(cut(d.pack.toUpperCase(), 10, w.bold), c2x + c2w / 2, 90, { size: 10, font: w.bold });
+    centered(cut(projet, 8.5), c2x + c2w / 2, 75, { size: 8.5 });
+    centered(`Planche établie le ${dateFr(d.genereLe)}`, c2x + c2w / 2, 54, { size: 8.5, color: MUTED });
+    // mention verticale, bord droit
+    w.page.drawText(w.safe('Visuels & 3D non contractuels · dimensions à vérifier sur place'), {
+      x: PW - 22,
+      y: 140,
+      size: 7.5,
+      font: w.regular,
+      color: MUTED,
+      rotate: degrees(90),
+    });
+  };
+
+  /** un meuble : photo détourée sur fond blanc, nom et dimensions dessous */
+  const bien = async (b: PlanchePdfData['pieces'][number]['biens'][number], x: number, y: number, bw: number, bh: number) => {
+    const capH = 28;
+    const img = await image(b.photo);
+    if (img) contain(img, x, y + capH, bw, bh - capH);
+    else {
+      w.page.drawRectangle({ x, y: y + capH, width: bw, height: bh - capH, color: LINE });
+      centered('photo à venir', x + bw / 2, y + capH + (bh - capH) / 2 - 3, { size: 8, color: MUTED });
+    }
+    const name = w.wrap(b.libelle, bw, 9, w.bold)[0] ?? '';
+    centered(name, x + bw / 2, y + 15, { size: 9, font: w.bold });
+    centered([b.dimensions, b.qr].filter(Boolean).join(' · '), x + bw / 2, y + 4, { size: 7.5, color: MUTED });
+  };
+
+  // page de garde : bandeau d'encre avec le projet, et le premier visuel de pièce à droite
+  newPage();
+  const coverImg = await image(d.pieces.find((p) => p.ambiance)?.ambiance);
+  const panelW = coverImg ? 430 : PW;
+  w.page.drawRectangle({ x: 0, y: 0, width: panelW, height: PH - 6, color: INK });
+  if (coverImg) {
+    const bw = PW - panelW;
+    const bh = PH - 6;
+    const k = Math.max(bw / coverImg.width, bh / coverImg.height);
+    // remplissage : l'image déborde, le bandeau d'encre recouvre le côté gauche
+    w.page.drawImage(coverImg, { x: panelW + (bw - coverImg.width * k) / 2, y: (bh - coverImg.height * k) / 2, width: coverImg.width * k, height: coverImg.height * k });
+    w.page.drawRectangle({ x: 0, y: 0, width: panelW, height: PH - 6, color: INK });
+  }
+  drawBrandSymbol(w.page, 60, PH - 80, 64, { pin: WHITE, cube: INK });
+  w.text(d.emetteur, 116, PH - 118, { size: 16, font: w.bold, color: WHITE });
+  w.text("PLANCHE D'AMÉNAGEMENT", 60, 420, { size: 11, font: w.bold, color: rgb(0.55, 0.85, 0.75) });
+  let cy = 384;
+  for (const l of w.wrap(d.pack, panelW - 120, 30, w.bold).slice(0, 3)) {
+    w.text(l, 60, cy, { size: 30, font: w.bold, color: WHITE });
+    cy -= 36;
+  }
+  cy -= 4;
+  for (const l of w.wrap(projet, panelW - 120, 12)) {
+    w.text(l, 60, cy, { size: 12, color: WHITE });
+    cy -= 17;
+  }
+  if (d.description) {
+    cy -= 8;
+    for (const l of w.wrap(d.description, panelW - 120, 10).slice(0, 5)) {
+      w.text(l, 60, cy, { size: 10, color: rgb(0.8, 0.86, 0.9) });
+      cy -= 14;
+    }
+  }
+  w.text(`${total} bien${total > 1 ? 's' : ''}${nommees ? ` · ${nommees} pièce${nommees > 1 ? 's' : ''}` : ''}`, 60, 96, { size: 10, color: WHITE });
+  w.text(`Établie le ${dateFr(d.genereLe)}`, 60, 80, { size: 10, color: rgb(0.8, 0.86, 0.9) });
+
+  const CW = right - MX;
+  const CH = top - bottom;
   for (const p of d.pieces) {
-    // titre de pièce jamais seul en bas de page
-    w.ensure(28 + (p.ambiance ? 200 : cardH));
-    w.text(`${p.nom}`, M, w.y, { size: 13, font: w.bold });
-    w.text(`${p.biens.length} bien${p.biens.length > 1 ? 's' : ''}`, right, w.y, { size: 9, color: MUTED, align: 'right' });
-    w.y -= 8;
-    w.page.drawLine({ start: { x: M, y: w.y }, end: { x: right, y: w.y }, thickness: 1.2, color: ACCENT });
-    w.y -= 12;
-    if (p.ambiance) {
-      try {
-        const img = await w.doc.embedJpg(p.ambiance);
-        const maxH = 260;
-        const s = Math.min((right - M) / img.width, maxH / img.height);
-        w.ensure(img.height * s + 10);
-        w.page.drawImage(img, { x: M, y: w.y - img.height * s, width: img.width * s, height: img.height * s });
-        w.y -= img.height * s + 14;
-      } catch {
-        // visuel illisible : la planche part sans lui
+    const amb = await image(p.ambiance);
+    let rest = [...p.biens];
+    let first = true;
+    while (first || rest.length) {
+      newPage();
+      chrome(first ? p.nom : `${p.nom} (suite)`, amb ? 'AMBIANCE & VUE 3D' : 'SÉLECTION DE MOBILIER');
+      const cells: [number, number, number, number][] = [];
+      if (first && amb) {
+        // grand visuel à gauche, deux colonnes de meubles à droite ; au-delà de quatre meubles, une rangée dessous.
+        // Le cadre garde le format du visuel (PLANCHE_AMBIANCE) ; un petit pack est centré verticalement.
+        const ratio = PLANCHE_AMBIANCE.width / PLANCHE_AMBIANCE.height;
+        const row = rest.length > 4;
+        const aw = CW * (row ? 0.6 : 0.66);
+        const ah = aw / ratio;
+        const ax = MX;
+        const blockTop = row ? top : top - (CH - ah) / 2;
+        const ay = blockTop - ah;
+        contain(amb, ax, ay, aw, ah);
+        const rx = ax + aw + GAP;
+        const rw = (right - rx - GAP) / 2;
+        const rh = (ah - GAP) / 2;
+        for (const r of [0, 1]) for (const c of [0, 1]) cells.push([rx + c * (rw + GAP), blockTop - (r + 1) * rh - r * GAP, rw, rh]);
+        if (row) {
+          const bh = ay - GAP - bottom;
+          const bw = (CW - 3 * GAP) / 4;
+          for (let c = 0; c < 4; c++) cells.push([MX + c * (bw + GAP), bottom, bw, bh]);
+        }
+      } else if (rest.length <= 4) {
+        // peu de meubles : une rangée de grandes photos, centrée
+        const n = Math.max(rest.length, 1);
+        const bw = Math.min((CW - (n - 1) * GAP) / n, 340);
+        const bh = Math.min(CH * 0.8, bw * 1.15);
+        const x0 = MX + (CW - n * bw - (n - 1) * GAP) / 2;
+        for (let c = 0; c < n; c++) cells.push([x0 + c * (bw + GAP), bottom + (CH - bh) / 2, bw, bh]);
+      } else {
+        const bw = (CW - 3 * GAP) / 4;
+        const bh = (CH - GAP) / 2;
+        for (const r of [0, 1]) for (let c = 0; c < 4; c++) cells.push([MX + c * (bw + GAP), top - (r + 1) * bh - r * GAP, bw, bh]);
       }
+      const here = rest.slice(0, cells.length);
+      rest = rest.slice(cells.length);
+      for (const [i, b] of here.entries()) await bien(b, ...cells[i]!);
+      if (!here.length && !amb) centered('Aucun bien dans cette pièce', MX + CW / 2, bottom + CH / 2, { size: 11, color: MUTED });
+      first = false;
     }
-    for (let i = 0; i < p.biens.length; i += COLS) {
-      w.ensure(cardH);
-      const top = w.y;
-      for (const [j, b] of p.biens.slice(i, i + COLS).entries()) {
-        const x = M + j * (cardW + GAP);
-        let drawn = false;
-        if (b.photo) {
-          try {
-            const img = await w.doc.embedJpg(b.photo);
-            w.page.drawImage(img, { x, y: top - photoH, width: cardW, height: photoH });
-            drawn = true;
-          } catch {
-            /* photo illisible */
-          }
-        }
-        if (!drawn) {
-          w.page.drawRectangle({ x, y: top - photoH, width: cardW, height: photoH, color: LINE });
-          w.text('photo à venir', x + cardW / 2 - w.width('photo à venir', 8) / 2, top - photoH / 2 - 3, { size: 8, color: MUTED });
-        }
-        const lines = w.wrap(b.libelle, cardW, 9, w.bold).slice(0, 2);
-        let y = top - photoH - 12;
-        for (const l of lines) {
-          w.text(l, x, y, { size: 9, font: w.bold });
-          y -= 11;
-        }
-        w.text([b.qr, b.dimensions].filter(Boolean).join(' · '), x, y, { size: 7.5, color: MUTED });
-        y -= 10;
-        w.text(b.statut, x, y, { size: 7.5, color: MUTED });
-      }
-      w.y = top - cardH - 8;
-    }
-    w.y -= 10;
   }
   return save(w, d.genereLe);
 }
