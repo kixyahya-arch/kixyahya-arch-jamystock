@@ -301,6 +301,18 @@ describe('visuels des pièces d’un pack', () => {
     expect(piecesOf(s2).get('Bureau')?.erreur).toMatch(/^Solde API Higgsfield insuffisant.*Insufficient balance/);
   });
 
+  it('prépare la description de la pièce à coller dans Higgsfield, sans compter dans le plafond', async () => {
+    const [a] = t.data.articles.tilleuls;
+    const r = await post(u().b2bAdmin.email, '/me/cart-templates', { nom: 'Brief', projetId: t.data.projets.tilleuls, articleIds: [a], pieces: { [a!]: 'Bureau' } });
+    const b = await get(u().b2bAdmin.email, `/me/cart-templates/${r.body.id}/ambiances/brief?piece=Bureau`);
+    expect(b.status).toBe(200);
+    expect(b.body.piece).toBe('Bureau');
+    expect(b.body.prompt).toContain('furnished home office in a French real-estate sales office');
+    expect((await get(u().b2bAdmin.email, `/me/cart-templates/${r.body.id}/ambiances/brief?piece=Cuisine`)).status).toBe(422);
+    const bo = await t.http().get(`/api/v1/bo/packs/${r.body.id}/ambiances/brief?piece=Bureau`).set('Authorization', await auth(u().superAdmin.email));
+    expect(bo.status).toBe(200);
+  });
+
   it('sans clé Higgsfield, la génération est désactivée et l’image à la main reste possible', async () => {
     const config = loadConfig({ APP_DATABASE_URL: APP_URL, JWT_SECRET: 'test-secret-test-secret-test-secret-123', TENANT_ID: t.data.tenantId });
     const app = await createApp(config);

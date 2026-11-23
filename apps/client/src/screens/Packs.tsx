@@ -321,6 +321,7 @@ export function PackView({ id }: { id: string }) {
               ia={p.visuels.ia}
               restants={p.visuels.restantsCeMois}
               modifiable={p.modifiable}
+              photos={g.articles.filter((a) => a.photo).map((a) => ({ libelle: a.libelle, url: a.photo! }))}
               onChange={load}
             />
           )}
