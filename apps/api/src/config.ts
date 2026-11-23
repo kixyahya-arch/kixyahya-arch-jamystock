@@ -27,6 +27,15 @@ export interface AppConfig {
   /** Reprise de données : autorise le téléchargement de photos depuis une adresse locale ou privée (tests seulement). */
   reprisePhotosLocal: boolean;
   /**
+   * Générateur des visuels d'aménagement des pièces : Pollinations (gratuit, sans clé, actif par défaut en
+   * production), Higgsfield (payant, avec clé), ou aucun (seule l'image ajoutée à la main est proposée).
+   * VISUELS_IA=pollinations|higgsfield|off ; sans réglage : Pollinations en production, sinon Higgsfield si ses clés
+   * sont fournies.
+   */
+  visuels: 'pollinations' | 'higgsfield' | null;
+  /** Pollinations (pollinations.ai) : génération d'image par simple requête ; une clé facultative lève les limites. */
+  pollinations: { url: string; key?: string; model: string; timeoutMs: number };
+  /**
    * Visuels d'aménagement des packs générés par Higgsfield (api.higgsfield.ai). Sans clé, la génération est
    * désactivée et seule l'image ajoutée à la main est proposée. Les plafonds protègent le solde du compte.
    */
@@ -59,6 +68,14 @@ function jsonObject(raw: string | undefined): Record<string, unknown> {
 }
 
 const intOr = (raw: string | undefined, d: number) => (raw && /^\d+$/.test(raw) ? Number(raw) : d);
+
+function visuelsOf(env: NodeJS.ProcessEnv): AppConfig['visuels'] {
+  const v = (env.VISUELS_IA || '').trim().toLowerCase();
+  if (v === 'pollinations' || v === 'higgsfield') return v === 'higgsfield' && !(env.HIGGSFIELD_API_KEY_ID && env.HIGGSFIELD_API_KEY_SECRET) ? null : v;
+  if (v === 'off' || v === 'aucun') return null;
+  if (env.NODE_ENV === 'production' || env.RENDER === 'true') return 'pollinations';
+  return env.HIGGSFIELD_API_KEY_ID && env.HIGGSFIELD_API_KEY_SECRET ? 'higgsfield' : null;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const appDatabaseUrl = env.APP_DATABASE_URL ?? env.DATABASE_URL;
@@ -93,6 +110,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     mapTilesUrl: env.MAP_TILES_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     reprisePhotosLocal: env.REPRISE_PHOTOS_LOCAL === 'on',
+    visuels: visuelsOf(env),
+    pollinations: {
+      // {prompt} est remplacé par la description encodée ; avec une clé, l'adresse de l'API authentifiée
+      url: env.POLLINATIONS_URL || (env.POLLINATIONS_API_KEY ? 'https://gen.pollinations.ai/image/{prompt}' : 'https://image.pollinations.ai/prompt/{prompt}'),
+      key: env.POLLINATIONS_API_KEY || undefined,
+      model: env.POLLINATIONS_MODEL || 'flux',
+      timeoutMs: intOr(env.POLLINATIONS_TIMEOUT_MS, 3 * 60_000),
+    },
     higgsfield: {
       keyId: env.HIGGSFIELD_API_KEY_ID || undefined,
       keySecret: env.HIGGSFIELD_API_KEY_SECRET || undefined,

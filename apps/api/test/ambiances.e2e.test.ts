@@ -7,10 +7,11 @@ import { APP_URL, bootstrap, OWNER_URL, type TestContext } from './setup.js';
 import { AmbiancesService } from '../src/orders/ambiances.controller.js';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { ambiancePrompt, pieceEnglish } from '../src/orders/higgsfield.js';
+import { ambiancePrompt, meubleEnglish, pieceEnglish } from '../src/orders/higgsfield.js';
+import { PollinationsClient } from '../src/orders/pollinations.js';
 
 /**
- * Visuels d'aménagement des pièces d'un pack : génération par Higgsfield (serveur factice qui reprend l'API
+ * Visuels d'aménagement des pièces d'un pack : génération par Pollinations ou Higgsfield (serveur factice qui reprend l'API
  * documentée : dépôt signé, file d'attente, suivi, image), image ajoutée à la main, plafond mensuel.
  */
 
@@ -22,6 +23,8 @@ const fake = {
   uploads: [] as { headers: http.IncomingHttpHeaders; bytes: number }[],
   polls: new Map<string, number>(),
   modes: new Map<string, Mode>(),
+  pollinations: [] as string[],
+  pollinationsBusy: 0,
 };
 let png: Buffer;
 const server = http.createServer((req, res) => {
@@ -61,6 +64,12 @@ const server = http.createServer((req, res) => {
       if (n === 2) return json(200, { status: 'in_progress', request_id: id });
       if (fake.modes.get(id) === 'nsfw') return json(200, { status: 'nsfw', request_id: id });
       return json(200, { status: 'completed', request_id: id, images: [{ url: `${fake.base}/img/${id}.png` }] });
+    }
+    if (req.method === 'GET' && url.startsWith('/poll/')) {
+      fake.pollinations.push(url);
+      if (fake.pollinationsBusy-- > 0) return json(429, { error: 'queue full' });
+      res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      return res.end(png);
     }
     if (req.method === 'GET' && url.startsWith('/img/')) {
       res.writeHead(200, { 'Content-Type': 'image/png' });
@@ -122,7 +131,10 @@ describe('prompt', () => {
     expect(pieceEnglish('Véranda')).toBe('room called "Véranda"');
     const p = ambiancePrompt({ piece: 'Salon', description: 'Style scandinave', biens: [{ libelle: 'Canapé 3 places', dimensions: '2,1 × 0,9 × 0,8 m' }], references: 1 });
     expect(p).toContain('furnished living room in a French apartment');
-    expect(p).toContain('- Canapé 3 places (2.1 × 0.9 × 0.8 metres)');
+    expect(p).toContain('- three-seater sofa (2.1 × 0.9 × 0.8 metres)');
+    expect(meubleEnglish('Chaise de bureau noire')).toBe('black office chair');
+    expect(meubleEnglish('Étagère murale')).toBe('shelving unit');
+    expect(meubleEnglish('Truc bizarre')).toBe('Truc bizarre');
     expect(p).toContain('reference images');
     expect(p).toContain('Style scandinave');
     const accueil = ambiancePrompt({
@@ -136,8 +148,12 @@ describe('prompt', () => {
       references: 0,
     });
     expect(accueil).toContain('reception area in a French real-estate sales office');
-    expect(accueil).toContain('- 2 × Chaise visiteur (0.5 × 0.5 × 0.9 metres)\n- Totem PLV\n');
+    expect(accueil).toContain('- 2 × visitor chair (0.5 × 0.5 × 0.9 metres)\n- tall freestanding advertising display totem\n');
     expect(accueil).not.toContain('reference images');
+    const court = ambiancePrompt({ piece: 'Accueil', description: null, biens: [{ libelle: 'Chaise visiteur 5', dimensions: '0,5 × 0,5 × 0,9 m' }, { libelle: 'Chaise visiteur 6', dimensions: '0,5 × 0,5 × 0,9 m' }], references: 0, court: true });
+    expect(court).toBe(
+      'Photorealistic wide-angle interior photograph of a reception area in a French real-estate sales office, furnished only with 2 visitor chairs (0.5 × 0.5 × 0.9 m). Minimal uncluttered space, natural daylight, neutral walls and floor, realistic scale, no people, no text.',
+    );
   });
 });
 
@@ -302,5 +318,80 @@ describe('visuels des pièces d’un pack', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('génère le visuel avec Pollinations, gratuit et sans clé, à partir de la description des meubles', async () => {
+    const config = loadConfig({
+      APP_DATABASE_URL: APP_URL,
+      JWT_SECRET: 'test-secret-test-secret-test-secret-123',
+      TENANT_ID: t.data.tenantId,
+      VISUELS_IA: 'pollinations',
+      POLLINATIONS_URL: `${fake.base}/poll/{prompt}`,
+    });
+    const app = await createApp(config);
+    await app.init();
+    try {
+      await sys(`DELETE FROM pack_ambiance`);
+      const { default: request } = await import('supertest');
+      const token = await auth(u().b2bAdmin.email);
+      const [a] = t.data.articles.tilleuls;
+      const r = await request(app.getHttpServer()).post('/api/v1/me/cart-templates').set('Authorization', token).send({ nom: 'Gratuit', projetId: t.data.projets.tilleuls, articleIds: [a], pieces: { [a!]: 'Bureau' } });
+      const before = await request(app.getHttpServer()).get(`/api/v1/me/cart-templates/${r.body.id}`).set('Authorization', token);
+      expect(before.body.visuels).toMatchObject({ ia: true });
+      fake.pollinations.length = 0;
+      const g = await request(app.getHttpServer()).post(`/api/v1/me/cart-templates/${r.body.id}/ambiances/ia`).set('Authorization', token).send({ piece: 'Bureau' });
+      expect(g.status).toBe(202);
+      await app.get(AmbiancesService).idle();
+      expect(fake.pollinations).toHaveLength(1);
+      const q = new URL(fake.base + fake.pollinations[0]!);
+      expect(decodeURIComponent(q.pathname)).toContain('of a home office in a French real-estate sales office, furnished only with');
+      expect(q.searchParams.get('model')).toBe('flux');
+      expect(q.searchParams.get('width')).toBe('1600');
+      const d = await request(app.getHttpServer()).get(`/api/v1/me/cart-templates/${r.body.id}`).set('Authorization', token);
+      expect(piecesOf(d).get('Bureau')).toMatchObject({ statut: 'PRET', source: 'IA' });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('client Pollinations', () => {
+  const cfg = { url: 'https://img.example/prompt/{prompt}', model: 'flux', timeoutMs: 1000 };
+  const image = () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
+
+  it('attend et réessaie quand le service gratuit est saturé, puis renvoie l’image', async () => {
+    const calls: { url: string; auth?: string }[] = [];
+    const responses = [new Response('busy', { status: 429 }), image()];
+    const c = new PollinationsClient(
+      { ...cfg, key: 'pk_test' },
+      (async (url: string, init: RequestInit) => {
+        calls.push({ url, auth: (init.headers as Record<string, string>).Authorization });
+        return responses.shift()!;
+      }) as typeof fetch,
+      async () => undefined,
+    );
+    expect((await c.generate('a  room\nwith chairs', 7)).length).toBe(3);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.url).toBe('https://img.example/prompt/a%20room%20with%20chairs?model=flux&width=1600&height=1000&seed=7&nologo=true&private=true');
+    expect(calls[0]!.auth).toBe('Bearer pk_test');
+  });
+
+  it('signale une clé refusée sans réessayer', async () => {
+    let n = 0;
+    const c = new PollinationsClient(cfg, (async () => (n++, new Response('{"error":"bad key"}', { status: 401 }))) as unknown as typeof fetch, async () => undefined);
+    await expect(c.generate('x')).rejects.toThrow(/Clé Pollinations refusée/);
+    expect(n).toBe(1);
+  });
+
+  it('choisit Pollinations par défaut en production, Higgsfield en local s’il a ses clés', () => {
+    const base = { APP_DATABASE_URL: 'postgres://x', JWT_SECRET: 'x'.repeat(32) };
+    expect(loadConfig({ ...base, RENDER: 'true' }).visuels).toBe('pollinations');
+    expect(loadConfig({ ...base, RENDER: 'true', HIGGSFIELD_API_KEY_ID: 'a', HIGGSFIELD_API_KEY_SECRET: 'b' }).visuels).toBe('pollinations');
+    expect(loadConfig({ ...base, RENDER: 'true', VISUELS_IA: 'higgsfield', HIGGSFIELD_API_KEY_ID: 'a', HIGGSFIELD_API_KEY_SECRET: 'b' }).visuels).toBe('higgsfield');
+    expect(loadConfig({ ...base, RENDER: 'true', VISUELS_IA: 'off' }).visuels).toBeNull();
+    expect(loadConfig({ ...base, HIGGSFIELD_API_KEY_ID: 'a', HIGGSFIELD_API_KEY_SECRET: 'b' }).visuels).toBe('higgsfield');
+    expect(loadConfig(base).visuels).toBeNull();
+    expect(loadConfig({ ...base, RENDER: 'true' }).pollinations.url).toBe('https://image.pollinations.ai/prompt/{prompt}');
+    expect(loadConfig({ ...base, POLLINATIONS_API_KEY: 'k' }).pollinations.url).toBe('https://gen.pollinations.ai/image/{prompt}');
   });
 });

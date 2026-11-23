@@ -3,7 +3,7 @@ import { api, del, post } from '../lib/api';
 import type { Ambiance } from '../lib/types';
 
 /**
- * Visuel d'aménagement en tête d'une pièce de pack : généré par IA (Higgsfield) à partir des meubles de la pièce,
+ * Visuel d'aménagement en tête d'une pièce de pack : généré par IA (Pollinations ou Higgsfield) à partir des meubles de la pièce,
  * ou image ajoutée à la main (photo de l'appartement témoin, rendu d'architecte). Il figure aussi sur la planche.
  */
 export function RoomVisual({

@@ -301,7 +301,7 @@ export interface PackDetail {
   nbDisponibles: number;
   pieces: { piece: string | null; articles: PackArticle[]; ambiance: Ambiance | null }[];
   articles: PackArticle[];
-  /** ia : génération Higgsfield activée ; restantsCeMois : générations encore possibles ce mois-ci */
+  /** ia : génération par IA activée ; restantsCeMois : générations encore possibles ce mois-ci */
   visuels: { ia: boolean; restantsCeMois: number | null };
 }
 
