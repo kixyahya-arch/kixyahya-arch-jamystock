@@ -293,6 +293,8 @@ export class PacksService {
         statut: a ? (STATUT[a.statut] ?? a.statut) : null,
         projet: a?.projet ?? null,
         dimensions: a ? dims(a) : null,
+        /** en mètres, pour la vue 3D de la pièce */
+        mesures: a?.longueur_m && a.largeur_m ? { longueur: Number(a.longueur_m), largeur: Number(a.largeur_m), hauteur: a.hauteur_m ? Number(a.hauteur_m) : null } : null,
         piece: m.pieces?.[aid] ?? null,
         indisponible: unavailable(a),
         vignette: a?.photo ? this.files.photoUrl(user.tenantId, a.photo, 't') : null,
