@@ -1204,8 +1204,10 @@ button.tile:hover {
 .tile strong {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 2.3rem;
+  /* un montant (« 2 450,00 € ») tient sur une ligne même dans une tuile étroite */
+  font-size: clamp(1.5rem, 2.1vw, 2.3rem);
   line-height: 1;
+  white-space: nowrap;
 }
 .tile span {
   font-size: 0.86rem;

@@ -36,6 +36,14 @@ export function Collection({ ctx, role }: { ctx: Ctx; role: string }) {
     .join(', ');
   const text = description.trim() || summary;
   const ready = adresse.trim().length >= 3 && date && text && contact.nom.trim() && contact.telephone.trim().length >= 6 && (role !== 'B2B_USER' || projetId);
+  const manque = [
+    role === 'B2B_USER' && !projetId && 'le projet',
+    adresse.trim().length < 3 && 'l’adresse d’enlèvement',
+    !date && 'la date souhaitée',
+    !text && 'ce qu’il faut collecter',
+    !contact.nom.trim() && 'le contact sur place',
+    contact.telephone.trim().length < 6 && 'son téléphone',
+  ].filter((x): x is string => !!x);
 
   // l'assistant remplit le volume ; une saisie à la main reste possible ensuite
   const setCount = (key: string, n: number) => {
@@ -245,6 +253,7 @@ export function Collection({ ctx, role }: { ctx: Ctx; role: string }) {
         <button type="button" className="btn primary big" disabled={!ready || busy} onClick={() => void submit()}>
           {busy ? (photos.length ? 'Envoi des photos…' : 'Envoi…') : forecast?.depasse ? 'Demander la collecte malgré le dépassement' : 'Demander la collecte'}
         </button>
+        {manque.length > 0 && <p className="hint small">À compléter : {manque.join(', ')}.</p>}
       </section>
     </>
   );
